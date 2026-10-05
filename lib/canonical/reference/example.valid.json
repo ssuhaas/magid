@@ -1,0 +1,293 @@
+{
+  "schema_version": "1.1.0",
+  "run_id": "run1",
+  "revision": 0,
+  "extraction_version": "v1",
+  "policy_version": "v1",
+  "template": {
+    "file_id": "template",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "bid_metadata": {
+    "customer_name": null,
+    "ticket_number": null
+  },
+  "source_files": [
+    {
+      "file_id": "file1",
+      "original_name": "synthetic.xlsx",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "source_role": "customer_input",
+      "sheets": [
+        {
+          "sheet_id": "sheet1",
+          "name": "Items",
+          "ordinal": 0
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "e1",
+      "file_id": "file1",
+      "sheet_id": "sheet1",
+      "range": "A2",
+      "raw_value": "Glove",
+      "stored_type": "string",
+      "displayed_text": "Glove",
+      "number_format": null,
+      "formula": null,
+      "cached_result": null,
+      "formula_verified": false,
+      "merge_anchor": null,
+      "semantic_role": "customer_specification",
+      "span": null
+    }
+  ],
+  "regions": [
+    {
+      "region_id": "r1",
+      "file_id": "file1",
+      "sheet_id": "sheet1",
+      "range": "A1:A2",
+      "header_evidence_ids": [],
+      "lane_order": 0,
+      "section_label": null,
+      "classification": "item_table",
+      "resolution": "approved_rule",
+      "approval_ref": "layout-v1",
+      "coverage": [
+        {
+          "evidence_id": "e1",
+          "disposition": "item",
+          "item_ids": [
+            "i1"
+          ],
+          "reason": "Product"
+        }
+      ]
+    }
+  ],
+  "items": [
+    {
+      "item_id": "i1",
+      "lineage": {
+        "file_id": "file1",
+        "sheet_id": "sheet1",
+        "region_id": "r1",
+        "source_ranges": [
+          "A2"
+        ],
+        "section": null,
+        "lane_order": 0,
+        "source_order": 0,
+        "parent_item_ids": []
+      },
+      "inclusion": "included",
+      "exclusion_reason": null,
+      "fields": {
+        "online_bid_sequence": {
+          "presence": "absent",
+          "candidates": [],
+          "selected_candidate_id": null,
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": "No value in reviewed source region",
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        },
+        "customer_reference": {
+          "presence": "absent",
+          "candidates": [],
+          "selected_candidate_id": null,
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": "No value in reviewed source region",
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        },
+        "output_category": {
+          "presence": "absent",
+          "candidates": [],
+          "selected_candidate_id": null,
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": "No value in reviewed source region",
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        },
+        "description_primary": {
+          "presence": "present",
+          "candidates": [
+            {
+              "candidate_id": "description",
+              "value": "Glove",
+              "evidence_ids": [
+                "e1"
+              ],
+              "input_candidate_ids": [],
+              "method": "copied",
+              "rule_version": "copy-v1",
+              "explanation": "Synthetic explicit cell mapping"
+            }
+          ],
+          "selected_candidate_id": "description",
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": null,
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        },
+        "description_secondary": {
+          "presence": "absent",
+          "candidates": [],
+          "selected_candidate_id": null,
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": "No value in reviewed source region",
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        },
+        "size": {
+          "presence": "absent",
+          "candidates": [],
+          "selected_candidate_id": null,
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": "No value in reviewed source region",
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        },
+        "manufacturer_name": {
+          "presence": "absent",
+          "candidates": [],
+          "selected_candidate_id": null,
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": "No value in reviewed source region",
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        },
+        "manufacturer_part_primary": {
+          "presence": "absent",
+          "candidates": [],
+          "selected_candidate_id": null,
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": "No value in reviewed source region",
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        },
+        "manufacturer_part_secondary": {
+          "presence": "absent",
+          "candidates": [],
+          "selected_candidate_id": null,
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": "No value in reviewed source region",
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        },
+        "annual_usage": {
+          "presence": "absent",
+          "candidates": [],
+          "selected_candidate_id": null,
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": "No value in reviewed source region",
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        },
+        "customer_uom": {
+          "presence": "absent",
+          "candidates": [],
+          "selected_candidate_id": null,
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": "No value in reviewed source region",
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        },
+        "pack_quantity": {
+          "presence": "absent",
+          "candidates": [],
+          "selected_candidate_id": null,
+          "resolution": "auto_accepted",
+          "review_reason_codes": [],
+          "decision_revision": 0,
+          "review_event_id": null,
+          "disposition_reason": "No value in reviewed source region",
+          "confidence_assessment": {
+            "model_score": null,
+            "calibrated_probability": null,
+            "calibration_version": null
+          }
+        }
+      },
+      "identifiers": [],
+      "quantity_observations": [],
+      "pack_observations": [],
+      "context_notes": [],
+      "issue_ids": []
+    }
+  ],
+  "issues": [],
+  "review_events": [],
+  "extensions": []
+}
