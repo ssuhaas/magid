@@ -135,6 +135,7 @@ export default function Home() {
     model: string;
     provider: string;
     providerNotice: string;
+    concurrency: number;
   } | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiProgress, setAiProgress] = useState('');
@@ -351,6 +352,10 @@ export default function Home() {
           typeof v.model === 'string'
         )
           setAiConfig({
+            concurrency:
+              'concurrency' in v && typeof v.concurrency === 'number' &&
+              Number.isInteger(v.concurrency) && v.concurrency >= 1 && v.concurrency <= 2
+                ? v.concurrency : 2,
             configured: v.configured,
             model: v.model,
             provider: 'provider' in v && typeof v.provider === 'string' ? v.provider : 'openai',
@@ -840,16 +845,24 @@ export default function Home() {
                 buildScope(book, baseline.slice(i * 3, i * 3 + 3), {
                   digest: sourceDigest,
                   scopeId: crypto.randomUUID(),
+                  targeted: true,
                 }),
               ),
         };
       }
       const scopes = scopeCache.current.scopes;
+      debug('ai', 'planned', 'AI generation is limited to unresolved fields; independent source checks cover every item.', {
+        groups: scopes.length,
+        items: baseline.length,
+        concurrency: aiConfig?.concurrency || 2,
+        requestedFields: scopes.flatMap((s: any) => s.records).reduce((n: number, r: any) => n + (r.requestedColumns?.length ?? 12), 0),
+      });
       const { proposed, metadata, notices, evaluations, issues } = await processProposalScopes({
         book,
         baseline,
         scopes,
         sourceDigest,
+        concurrency: aiConfig?.concurrency || 2,
         cache: stageCache.current,
         check,
         signal: abort.signal,

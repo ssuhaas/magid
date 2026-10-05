@@ -183,3 +183,77 @@ test('nonretryable failures and empty scopes retain their existing error behavio
     /Map items or choose source rows first/,
   );
 });
+
+const deferred = () => {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+};
+function individualScopes(options) {
+  options.scopes = options.baseline.map(record => buildScope(options.book, [record], {
+    digest: options.sourceDigest, scopeId: options.createScopeId(),
+  }));
+  return options;
+}
+
+test('two groups overlap, but out-of-order completion preserves source order and values', async () => {
+  const options = individualScopes(fixture());
+  const first = deferred(), bothStarted = deferred();
+  let active = 0, peak = 0, starts = 0;
+  const run = processProposalScopes({ ...options, concurrency: 2, process: async scope => {
+    active++;
+    peak = Math.max(peak, active);
+    if (++starts === 2) bothStarted.resolve();
+    if (scope.records[0].anchors[0] === 'A1') await first.promise;
+    active--;
+    return response(scope);
+  }});
+  await bothStarted.promise;
+  first.resolve();
+  const result = await run;
+  assert.equal(peak, 2);
+  assert.deepEqual(result.proposed.map(r => r.values.E.value), ['Glove', 'Helmet']);
+  assert.deepEqual(result.evaluations.map(e => e.items[0].anchors), [['A1'], ['A2']]);
+});
+
+test('a failed group aborts its sibling and returns no partial results or late progress', async () => {
+  const options = individualScopes(fixture());
+  const siblingStarted = deferred(), fail = deferred();
+  const messages = [];
+  let canceled = false;
+  const original = structuredClone(options.baseline);
+  const run = processProposalScopes({ ...options, progress: m => messages.push(m), process: async (scope, controls) => {
+    if (scope.records[0].anchors[0] === 'A1') {
+      await fail.promise;
+      throw Error('Provider failed');
+    }
+    siblingStarted.resolve();
+    await new Promise(resolve => controls.signal.addEventListener('abort', () => {
+      canceled = true;
+      resolve();
+    }, { once: true }));
+    controls.progress('waiting', 'will resume');
+    return response(scope);
+  }});
+  await siblingStarted.promise;
+  fail.resolve();
+  await assert.rejects(run, /Provider failed/);
+  assert.equal(canceled, true);
+  assert.deepEqual(options.baseline, original);
+  assert.ok(!messages.some(m => m.includes('will resume')));
+});
+
+test('serial fallback is supported; concurrent timeout splits retain targeted masks', async () => {
+  const options = fixture();
+  options.scopes = [buildScope(options.book, options.baseline, {
+    digest: options.sourceDigest, scopeId: 'target', targeted: true,
+  })];
+  const seen = [];
+  await processProposalScopes({ ...options, concurrency: 1, process: async scope => {
+    if (scope.records.length > 1) throw Object.assign(Error('Too large'), { status: 413 });
+    seen.push(scope.records[0].requestedColumns);
+    return response(scope);
+  }});
+  assert.equal(seen.length, 2);
+  assert.ok(seen.every(columns => columns.includes('E')));
+});

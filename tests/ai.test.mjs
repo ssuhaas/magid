@@ -47,3 +47,19 @@ test('Gemini credential failures stay sanitized; invalid provider/model configur
 });
 
 test('Google invalid-key response is classified without returning raw provider content',async()=>{await assert.rejects(callExtraction(input,{provider:'gemini',key:'private-test-key',fetchImpl:async()=>Response.json({error:{message:'API key not valid. Please pass a valid API key.',details:[{reason:'API_KEY_INVALID',secret:'private-test-key'}]}},{status:400})}),e=>e.status===503&&e.message.includes('Gemini API key is invalid')&&!e.message.includes('private-test-key'));});
+
+test('provider token diagnostics expose only nonnegative numeric usage for both providers', async () => {
+  for (const provider of ['openai', 'gemini']) {
+    const events = [];
+    const payload = provider === 'gemini'
+      ? { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(result()) }] } }],
+          usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 20, thoughtsTokenCount: -1, totalTokenCount: 'secret' } }
+      : { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(result()) }] }],
+          usage: { input_tokens: 100, output_tokens: 20, total_tokens: 'secret', output_tokens_details: { reasoning_tokens: -1 } } };
+    await callExtraction(input, { provider, key: 'private-key', fetchImpl: async () => Response.json(payload), observer: event => events.push(event) });
+    const usage = events.find(event => event.message === 'Provider request completed.').detail;
+    assert.deepEqual(usage, { inputTokens: 100, outputTokens: 20 });
+    assert.ok(!JSON.stringify(events).includes('private-key'));
+    assert.ok(!JSON.stringify(events).includes('secret'));
+  }
+});
