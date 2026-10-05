@@ -9,9 +9,9 @@ import {
   readLimitedJSON,
   DEFAULT_GEMINI_MODEL,
 } from '@/lib/ai/service.mjs';
+import { createRequestSlots, PROPOSAL_CONCURRENCY } from '@/lib/ai/request-slots.mjs';
 export const dynamic = 'force-dynamic';
-const active = new Map<string, { id: string; expires: number; abort: AbortController }>();
-const recent = new Map<string, { at: number; count: number }>();
+const slots = createRequestSlots();
 const origin = 'https://magid-bid-normalizer.vieaura-4783.chatgpt.site';
 function config() {
   const values = env as unknown as Record<string, string | undefined>;
@@ -41,6 +41,7 @@ export async function GET() {
     configured: !!c.key,
     provider: c.provider,
     model: c.model,
+    concurrency: PROPOSAL_CONCURRENCY,
     storage: 'temporary request memory',
     providerNotice:
       c.provider === 'gemini'
@@ -57,40 +58,16 @@ export async function POST(request: Request) {
     return json({ error: 'Expected JSON cell evidence.' }, 415);
   const c = config();
   if (!c.key) return json({ error: 'Server-side model credential is not configured.' }, 503);
-  const now = Date.now();
-  for (const [id, lease] of active)
-    if (lease.expires <= now) {
-      lease.abort.abort();
-      active.delete(id);
-    }
-  for (const [id, v] of recent) if (now - v.at > 60000) recent.delete(id);
-  if (recent.size > 100)
-    return json(
-      { error: 'The processing service is busy. Waiting for a free slot.', code: 'SERVICE_BUSY' },
-      429,
-      5,
-    );
-  const rate = recent.get(user.userId) || { at: now, count: 0 };
-  if (rate.count >= 100)
-    return json(
-      { error: 'Waiting for the temporary request limit to reset.', code: 'REQUEST_RATE_LIMIT' },
-      429,
-      Math.max(1, Math.ceil((60000 - (now - rate.at)) / 1000)),
-    );
-  if (active.has(user.userId) || active.size >= 2)
-    return json(
-      {
-        error:
-          'Waiting for another proposal’s AI request to finish. Processing will resume automatically.',
-        code: 'SESSION_BUSY',
-      },
-      429,
-      3,
-    );
-  rate.count++;
-  recent.set(user.userId, rate);
-  const lease = { id: crypto.randomUUID(), expires: now + 27000, abort: new AbortController() };
-  active.set(user.userId, lease);
+  const admission = slots.acquire(user.userId);
+  if (!admission.lease)
+    return json({
+      error: admission.code === 'REQUEST_RATE_LIMIT'
+        ? 'Waiting for the temporary request limit to reset.'
+        : 'Waiting for a free AI processing slot. Processing will resume automatically.',
+      code: admission.code,
+    }, 429, admission.retryAfter);
+  const lease = admission.lease;
+  const deadline = setTimeout(() => lease.abort.abort(), 27000);
   const cancel = () => lease.abort.abort();
   request.signal.addEventListener('abort', cancel, { once: true });
   if (request.signal.aborted) cancel();
@@ -122,7 +99,8 @@ export async function POST(request: Request) {
       502,
     );
   } finally {
-    if (active.get(user.userId)?.id === lease.id) active.delete(user.userId);
+    clearTimeout(deadline);
+    slots.release(lease);
     request.signal.removeEventListener('abort', cancel);
   }
 }
