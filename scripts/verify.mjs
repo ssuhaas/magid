@@ -11,7 +11,10 @@ if (args.length && (args.length !== 1 || args[0] !== '--core')) {
 }
 const profile = args[0] === '--core' ? 'core' : 'full';
 const python = process.env.PYTHON || 'python3';
-const git = (...args) => spawnSync('git', args, { encoding: 'utf8' }).stdout?.trim() || 'unavailable';
+const git = (...args) => {
+  const result = spawnSync('git', args, { encoding: 'utf8' });
+  return result.status === 0 ? result.stdout.trim() : 'unavailable';
+};
 const report = {
   profile,
   startedAt: new Date().toISOString(),
