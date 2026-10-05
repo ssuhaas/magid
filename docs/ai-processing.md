@@ -55,7 +55,7 @@ upload description preparation, deterministic automation and three-item scopes.
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Daikin | 338 | 113 | 4,056 | 3,049 | 24.8% |
 | Hyundai | 35 | 12 | 420 | 296 | 29.5% |
-| Tesla | 476 | 159 | 5,712 | 2,443 | 57.2% |
+| Tesla | 476 | 159 | 5,712 | 2,449 | 57.1% |
 | Grainger | 31 | 11 | 372 | 306 | 17.7% |
 | Berry Global | 76 | 26 | 912 | 821 | 10.0% |
 
@@ -64,6 +64,8 @@ values, tokens, review exceptions or wall-clock speed. Extraction and evaluation
 still require two provider calls per group before retries. Input context is retained;
 its token count is not claimed to shrink. Two concurrent groups can reduce serial
 waiting, but provider limits and retries may offset the gain.
+
+The Tesla measurement includes the packaging exceptions recorded in [Accuracy gaps](accuracy-gaps.md).
 
 The temporary Pipeline tab records the planned group/field counts and actual
 nonnegative provider token usage when returned. It never records credentials or
