@@ -3,6 +3,10 @@
 For code ownership, invariants, verification commands, and remaining technical debt, see
 [Maintaining the prototype](docs/maintaining-the-prototype.md). The sections below include historical implementation notes.
 
+For repeatable checks, start with [Verification setup and acceptance checklist](docs/verification.md).
+Run `npm run verify` after supplying the private test fixtures. GitHub runs the
+explicitly smaller `npm run verify:core` profile; it does not certify full acceptance.
+
 A private, browser-session prototype: upload an Excel proposal, inspect source-backed candidate records, accept/edit/blank fields, decide item boundaries and extra columns, then download the original Magid template filled with reviewed values. Original workbook bytes and review decisions remain in the browser. AI starts automatically after upload; bounded source-cell evidence is sent through the authenticated server to the configured provider (OpenAI or Google Gemini); neither the app nor the browser saves proposal history. Closing/reloading the tab loses the session.
 
 ## Current implementation

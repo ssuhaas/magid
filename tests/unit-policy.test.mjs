@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync} from './helpers/fixtures.mjs';
 import {readWorkbook,extract} from '../lib/workbook.mjs';
 import {prepareDescriptions,productWording} from '../lib/description-policy.mjs';
 import {normalizeUnit,purchasingUnit} from '../lib/unit-policy.mjs';

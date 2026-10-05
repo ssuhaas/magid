@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync} from './helpers/fixtures.mjs';
 import {readWorkbook,extract,checkReady,exportWorkbook} from '../lib/workbook.mjs';
 import {identifierLoss} from '../lib/identifier-retention.mjs';
 import {buildScope,applyExtractionIssues} from '../lib/ai/client.mjs';

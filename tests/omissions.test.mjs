@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync } from './helpers/fixtures.mjs';
 import { createHash } from 'node:crypto';
 import { strFromU8, strToU8, zipSync } from 'fflate';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';

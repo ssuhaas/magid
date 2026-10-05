@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync} from './helpers/fixtures.mjs';
 import {reviewGroups,needsReview,spreadsheetWindow,batchFields} from '../lib/ui/review.mjs';
 import {readWorkbook,extract,makeRecord} from '../lib/workbook.mjs';
 import {createReviewController} from '../lib/canonical/bridge.mjs';

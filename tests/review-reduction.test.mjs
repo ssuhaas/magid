@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync} from './helpers/fixtures.mjs';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {readWorkbook,extract,checkReady,exportWorkbook} from '../lib/workbook.mjs';
@@ -39,7 +39,7 @@ test('source-backed Tesla subset exports labeled identifiers and count without f
  for(const sheet of s.book.sheets){for(const disposition of ['item','header','excluded']){const addresses=Object.keys(sheet.cells).filter(a=>disposition==='item'?sheet.name===s.records[0].sheet&&selected.has(a):disposition==='header'?sheet.name===s.records[0].sheet&&['E4','F4','G4','I4'].includes(a):!(sheet.name===s.records[0].sheet&&(selected.has(a)||['E4','F4','G4','I4'].includes(a))));for(let i=0;i<addresses.length;i+=100)applyCoverage(s.controller,index,prepareCoverage(index,{sheet:sheet.name,addresses:addresses.slice(i,i+100),disposition,role:disposition==='excluded'?'context':'customer_specification',reason:'Test-only one-row subset: all other cells are explicitly outside this fixture, not approved exclusions for the actual bid.'}));}approveLayout(s.controller,index,sheet.name,'Test-only one-row fixture coverage.');}
  s.coverageConfirmed=true;assert.deepEqual(finalReadiness(s).messages,[]);const snapshot=buildCanonical(s);assert.equal(s.controller.fields.size,0);assert.deepEqual(validate(snapshot.run,{final:true,trusted:snapshot.trusted}),[]);
  const trusted=Object.fromEntries(Object.entries(snapshot.trusted).map(([k,v])=>[k,[...v]])),py=`import sys,json\nsys.path.insert(0,'lib/canonical/reference')\nfrom validator import validate\nd=json.load(sys.stdin);t={}\nfor k,v in d['trusted'].items():\n if k in ('layout_approvals','review_event_ids'):t[k]=set(v)\n else:t[k]={tuple(json.loads(a)) if a.startswith('[') else a:b for a,b in v}\nprint(json.dumps(validate(d['run'],final=True,trusted=t)))\n`;
- const result=spawnSync('python',['-c',py],{input:JSON.stringify({run:snapshot.run,trusted}),encoding:'utf8'});assert.equal(result.status,0,result.stderr);assert.deepEqual(JSON.parse(result.stdout),[]);
+ const result=spawnSync(process.env.PYTHON || 'python3',['-c',py],{input:JSON.stringify({run:snapshot.run,trusted}),encoding:'utf8'});assert.equal(result.status,0,result.stderr);assert.deepEqual(JSON.parse(result.stdout),[]);
  const output=readWorkbook(await exportReviewedWorkbook({...s,proposalBytes,templateBytes,expectedSourceDigest:s.digest})).sheets.find(x=>x.name==='AI BID IDENTIFICATION TEMPLATE');for(const column of ['I','K','L','M'])assert.equal(output.cells[column+'2'].raw,s.records[0].values[column].value);
 });
 test('PR versus pair from AI is equivalent for a verified mapped source unit and does not create alternatives',()=>{

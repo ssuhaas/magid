@@ -46,3 +46,7 @@ next-env.d.ts
 /work/
 __pycache__/
 *.pyc
+
+# Private verification inputs and generated reports
+/tests/fixtures/
+/.verification/

@@ -8,7 +8,7 @@ import {callExtractionStage,callEvaluationStage} from '../lib/ai/service.mjs';
 import {reviewStats} from '../lib/ui/review.mjs';
 import {readWorkbook,extract} from '../lib/workbook.mjs';
 import {createReviewController} from '../lib/canonical/bridge.mjs';
-import {readFileSync} from 'node:fs';
+import {readFileSync} from './helpers/fixtures.mjs';
 const scope={mode:'enrich',digest:'a'.repeat(64),scopeId:'test',cells:[{sheet:'Items',cell:'B8',raw:'Glove 2L; 100/BX',formula:null,eligibleAnchor:true,contextRole:'item'},{sheet:'Items',cell:'G4',raw:'# of Pieces in a UoM',formula:null,eligibleAnchor:false,contextRole:'header'},{sheet:'Items',cell:'G8',raw:'10',formula:null,eligibleAnchor:true,contextRole:'item'}],records:[{id:'one',sheet:'Items',anchors:['B8'],currentValues:{E:'Glove'}}]};
 const field=(column,value,entries)=>({column,value,kind:'source_span',identifierType:'not_identifier',reason:'Literal source.',evidence:entries.map(([cell,quote])=>({sheet:'Items',cell,quote}))});
 const proposal=()=>({items:[{recordId:'one',sheet:'Items',anchors:['B8'],section:'',boundaryReason:'One row',ambiguous:false,fields:[field('G','2L',[['B8','2L']]),field('M','10',[['G8','10'],['G4','# of Pieces in a UoM']])],extras:[]}],warnings:[]});

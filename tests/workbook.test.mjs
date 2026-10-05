@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync} from './helpers/fixtures.mjs';
 import {DOMParser,XMLSerializer} from '@xmldom/xmldom';
 import {readWorkbook,extract,checkReady,exportWorkbook,mapRows,openZip} from '../lib/workbook.mjs';
 import {zipSync,strToU8} from 'fflate';
