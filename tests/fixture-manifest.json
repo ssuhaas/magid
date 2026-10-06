@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "attachments/8e933fef-5f19-4144-b944-9b1961b4ee51/Safety PPE Supplies 2024 FL.xlsx",
+      "sha256": "05ffccdc6098774d3824d72aa6350ee9d6a8994e6ec771437cdd69f2ac0a26f4"
+    },
+    {
+      "path": "attachments/a8b4fa56-bbb4-4d76-8e6a-50a859f829fc/RFQ for PPE.xlsx",
+      "sha256": "f2f30065d70bbf1bb49de7cd08834ee96504044f7f26cf9243edddb91ddeae56"
+    },
+    {
+      "path": "attachments/e6f63120-98ee-4723-92b3-e6959045d7c5/TESLA PPE RFP April 2025.xlsx",
+      "sha256": "b88cc9d306325df7ea85697825ef5d31c8e8125139d6288b6b886aec448c3faa"
+    },
+    {
+      "path": "attachments/fac704a8-4ebc-4e40-9bab-2a32a330cd7a/grainger-030926.xlsx",
+      "sha256": "b79533a5ed2cd85c5b825c70f83fbd2dd748e2e3cdcf6b612ca1d8096260facb"
+    },
+    {
+      "path": "attachments/5c3b8658-ae6e-4236-aa3e-731f507b82fc/PPE List.xlsx",
+      "sha256": "00183e4c2c59b21a16f13e46669c0364ada2069c8b3f11f9c5db688a6e664c09"
+    },
+    {
+      "path": "expected-records/daikin.expected.json",
+      "sha256": "b5543e46a2ca53ec8ab21e3b35531ad5894c02e619a021100d60a9b02d720bd2"
+    },
+    {
+      "path": "expected-records/hyundai.expected.json",
+      "sha256": "b378535cbc2b44f4ef400eda204c0c5cf7fdca313f558a1a8c5c34f1a7fc9d17"
+    },
+    {
+      "path": "expected-records/tesla.expected.json",
+      "sha256": "f5f677d2bc15560b5c2869d8930baf97f76cac4f16912b37bf61310dac240cd1"
+    },
+    {
+      "path": "expected-records/grainger.expected.json",
+      "sha256": "9e6adfb32db2c28a4e7dcd82fded7a4fecbe1bf16e45780b0a13f6bad38356c3"
+    },
+    {
+      "path": "expected-records/berry.expected.json",
+      "sha256": "58b83a11823c3df7da72bdf19bd3bf8a8c55289b2b0b6c730d28624a0102ef00"
+    },
+    {
+      "path": "expected-records/checked-subset.json",
+      "sha256": "686388a5cd89da2cafd049932828683bdcc0aa81c949e33aee34c89a950890bf"
+    }
+  ]
+}

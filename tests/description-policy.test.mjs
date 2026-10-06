@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync} from './helpers/fixtures.mjs';
 import {createHash} from 'node:crypto';
 import {extract,readWorkbook,checkReady} from '../lib/workbook.mjs';
 import {prepareDescriptions} from '../lib/description-policy.mjs';

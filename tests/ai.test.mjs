@@ -4,7 +4,7 @@ import {validateProposal,TASK,outputJSONSchema,DEFAULT_MODEL} from '../lib/ai/co
 import {callExtraction,readLimitedJSON} from '../lib/ai/service.mjs';
 import {applyProposal,buildScope} from '../lib/ai/client.mjs';
 import {makeRecord,readWorkbook,extract} from '../lib/workbook.mjs';
-import {readFileSync} from 'node:fs';
+import {readFileSync} from './helpers/fixtures.mjs';
 const digest='a'.repeat(64);
 const cells=[{sheet:'PPE',cell:'A1',raw:'Manufacturer Part Number',formula:null,eligibleAnchor:false},{sheet:'PPE',cell:'A2',raw:'000123',formula:null,eligibleAnchor:true},{sheet:'PPE',cell:'B2',raw:'Glove SZ 2L; 100/BX',formula:null,eligibleAnchor:true},{sheet:'PPE',cell:'C1',raw:'Annual Volume',formula:null,eligibleAnchor:false},{sheet:'PPE',cell:'C2',raw:'0',formula:null,eligibleAnchor:true},{sheet:'PPE',cell:'D2',raw:'CA',formula:null,eligibleAnchor:true}];
 const input={mode:'enrich',digest,scopeId:'scope',cells,records:[{id:'r1',sheet:'PPE',anchors:['B2'],currentValues:{E:'Glove SZ 2L; 100/BX'}}]};

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync} from './helpers/fixtures.mjs';
 import {coverageIndex,coverageStats,prepareCoverage,applyCoverage,approveLayout,checkCoverage,currentCoverage} from '../lib/canonical/coverage.mjs';
 import {createReviewController,buildCanonical,checkCanonical} from '../lib/canonical/bridge.mjs';
 import {captureDecision,assertCurrentDecision} from '../lib/canonical/decisions.mjs';

@@ -38,18 +38,17 @@ do not establish accuracy on a new proposal layout or provider response.
 
 ## Verification
 
-From the repository root:
+Use [Repeatable verification](verification.md) for setup, one-command checks,
+reports, CI scope and the browser/live-AI acceptance checklist. After fixture
+setup, run from the repository root:
 
 ```sh
-node --test tests/*.test.mjs
-node node_modules/typescript/bin/tsc --noEmit --incremental false
-python -m unittest discover -s lib/canonical/reference -p 'test_*.py'
-npm run build
+npm run verify
 ```
 
 The real-workbook tests require the original attachments and expected-record
-fixtures in the parent workspace. They deliberately fail when those fixtures are
-missing. Do not replace them with empty or silently skipped tests. Provider tests
+fixtures listed in the hash manifest. Full verification fails when they are
+missing or changed. Do not replace them with empty or silently skipped tests. Provider tests
 use controlled responses; they do not certify live AI accuracy.
 
 Use Prettier 3.6.2 with the repository configuration for app-owned files. Keep
@@ -73,8 +72,8 @@ authoritative reference schema as part of application cleanup.
   statements. Use observed acceptance results, not those historical statements,
   when deciding release readiness.
 
-The cancellation progress-message issue found during browser acceptance is a
-behavior change and is intentionally outside this cleanup.
+The later cancellation feedback fix is implemented; its queued-run browser
+recheck is covered by the acceptance checklist.
 
 ## Declining optional information
 
