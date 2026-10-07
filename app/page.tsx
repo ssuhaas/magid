@@ -87,6 +87,7 @@ import { extract, mapRows, checkReady, makeRecord } from '@/lib/workbook.mjs';
 import { fieldContracts } from '@/lib/canonical/field-contracts.mjs';
 import { finalReadiness, exportReviewedWorkbook } from '@/lib/canonical/export.mjs';
 import type { Book, Field, Item, SourceSelection } from '@/lib/review-types';
+import type { ColumnMetadata, SourceScope, StageCache } from '@/lib/ai/types';
 export default function Home() {
   const debugTrace = useRef(createTrace());
   const initialCandidates = useRef<Item[]>([]);
@@ -139,9 +140,7 @@ export default function Home() {
   } | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiProgress, setAiProgress] = useState('');
-  const [columnMeta, setColumnMeta] = useState<
-    Record<string, { meaning: string; benefit: string }>
-  >({});
+  const [columnMeta, setColumnMeta] = useState<ColumnMetadata>({});
   const [omissionNotice, setOmissionNotice] = useState('');
   const [confirmAction, setConfirmAction] = useState<null | {
     title: string;
@@ -151,8 +150,8 @@ export default function Home() {
   const [outputOpen, setOutputOpen] = useState(false);
   const automaticGeneration = useRef(-1);
   const operation = useRef<string | null>(null);
-  const stageCache = useRef(new Map());
-  const scopeCache = useRef<{ key: string; scopes: any[] } | null>(null);
+  const stageCache = useRef<StageCache>(new Map());
+  const scopeCache = useRef<{ key: string; scopes: SourceScope[] } | null>(null);
   const saveURL = useRef('');
   const [saveFile, setSaveFile] = useState<{ url: string; name: string } | null>(null);
   function discardDownload() {
@@ -855,7 +854,7 @@ export default function Home() {
         groups: scopes.length,
         items: baseline.length,
         concurrency: aiConfig?.concurrency || 2,
-        requestedFields: scopes.flatMap((s: any) => s.records).reduce((n: number, r: any) => n + (r.requestedColumns?.length ?? 12), 0),
+        requestedFields: scopes.flatMap((s) => s.records).reduce((n, r) => n + (r.requestedColumns?.length ?? 12), 0),
       });
       const { proposed, metadata, notices, evaluations, issues } = await processProposalScopes({
         book,
@@ -866,7 +865,7 @@ export default function Home() {
         cache: stageCache.current,
         check,
         signal: abort.signal,
-        observer: (event: any) =>
+        observer: (event) =>
           debug(event.stage || 'ai', event.status, event.message, event.detail),
         progress: (message: string) => {
           check();
