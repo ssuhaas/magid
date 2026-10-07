@@ -13,6 +13,7 @@ do not establish accuracy on a new proposal layout or provider response.
 | `lib/workbook.mjs`, `lib/parse.worker.ts`              | Bounded OOXML parsing, known-layout extraction, and workbook writing                                      |
 | `lib/ai/process-proposal.mjs`                          | Stage source groups, validate responses, split oversized/timed-out groups, collect results                |
 | `lib/ai/stages.mjs`                                    | Request deadlines, temporary stage cache, busy-service waits, and retry                                   |
+| `lib/ai/types.ts`                                     | Schema-derived AI payload types, temporary cache state and processing boundary contracts                 |
 | `lib/ai/client.mjs`, `contracts.mjs`, `evaluation.mjs` | Evidence scopes, response contracts, and source-grounded candidate application                            |
 | `app/api/extract/route.ts`, `lib/ai/service.mjs`       | Authenticated requests, leases, rate limits, and provider adapters                                        |
 | `lib/canonical/`                                       | Independent approval authority, source rules, dependent-field invalidation, coverage, and final readiness |
@@ -62,9 +63,17 @@ authoritative reference schema as part of application cleanup.
   follow feature boundaries and include interaction tests for session replacement,
   cancellation, stale decisions, and export invalidation. Moving all state into a
   generic hook would mostly relocate the coupling.
-- Core JavaScript modules still use permissive types. Shared UI types are a start;
-  enabling strict checking across the canonical/controller boundary needs a
-  dedicated migration with parity tests.
+- `lib/ai/types.ts` derives source scopes, proposals and evaluations from the
+  existing Zod schemas. It defines the session cache, progress observer, service
+  error metadata and staged processing result. `process-proposal.mjs` and
+  `stages.mjs` enable strict checking with `@ts-check`; the page uses these types
+  instead of arbitrary scopes and cache entries. Compile-only negative cases in
+  `tests/ai-contracts.types.ts` run as part of the normal TypeScript check.
+  Sequential stage completion and queue ownership still require runtime guards;
+  the local type assertions document those existing invariants, not validation
+  of untrusted responses. Model candidates and display statuses remain separate
+  from controller authority. Parsing, candidate application and canonical/controller
+  internals still use permissive types; migrating those requires parity checks.
 - Browser and complete AI acceptance are separate from unit/regression checks.
   Complete AI runs and downloaded-output inspection for all five proposals remain
   necessary before declaring this version accepted.
