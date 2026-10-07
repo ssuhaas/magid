@@ -80,7 +80,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
-  createNormalizationCache, prepareNormalization, runNormalization, finalizeNormalization,
+  prepareNormalization, runNormalization, finalizeNormalization,
 } from '@/lib/ai/normalize-proposal.mjs';
 import { createReviewController } from '@/lib/canonical/bridge.mjs';
 import { extract, mapRows, checkReady, makeRecord } from '@/lib/workbook.mjs';
@@ -88,6 +88,8 @@ import { fieldContracts } from '@/lib/canonical/field-contracts.mjs';
 import { finalReadiness, exportReviewedWorkbook } from '@/lib/canonical/export.mjs';
 import type { Book, Field, Item, SourceSelection } from '@/lib/review-types';
 import type { ColumnMetadata } from '@/lib/ai/types';
+import { createSessionCoordinator } from '@/lib/session/coordinator.mjs';
+import { parseWorkbookInWorker } from '@/lib/session/parse-workbook.mjs';
 export default function Home() {
   const debugTrace = useRef(createTrace());
   const initialCandidates = useRef<Item[]>([]);
@@ -99,8 +101,8 @@ export default function Home() {
       status,
       message,
       detail,
-      generation: request.current,
-      revision: editRevision.current,
+      generation: session.current.generation,
+      revision: session.current.reviewRevision,
     });
     setDebugTick((t) => t + 1);
   }
@@ -149,13 +151,10 @@ export default function Home() {
   }>(null);
   const [outputOpen, setOutputOpen] = useState(false);
   const automaticGeneration = useRef(-1);
-  const operation = useRef<string | null>(null);
-  const aiCache = useRef(createNormalizationCache());
-  const saveURL = useRef('');
+  const session = useRef(createSessionCoordinator());
   const [saveFile, setSaveFile] = useState<{ url: string; name: string } | null>(null);
   function discardDownload() {
-    if (saveURL.current) URL.revokeObjectURL(saveURL.current);
-    saveURL.current = '';
+    session.current.invalidateDownload();
     setSaveFile(null);
   }
 
@@ -206,36 +205,18 @@ export default function Home() {
     () => (sourceIndex ? checkCoverage(controller.current, sourceIndex, columns) : []),
     [sourceIndex, coverageTick, columns],
   );
-  const aiAbort = useRef<AbortController | null>(null);
-  const digest = useRef('');
-  const editRevision = useRef(0);
-  const worker = useRef<Worker | null>(null);
-  const workerReject = useRef<((error: Error) => void) | null>(null);
-  const workerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const request = useRef(0);
   const input = useRef<HTMLInputElement>(null);
-  const bytes = useRef<Uint8Array | null>(null);
   const events = useRef<object[]>([]);
-  const born = useRef(0);
-  const active = useRef(0);
-  const grace = useRef(0);
   const live = useRef({ items, columns, coverage, book, blockers: [] as string[] });
   function decisionState() {
-    return {
-      generation: request.current,
-      reviewRevision: editRevision.current,
-      sourceDigest: digest.current,
-      controllerRevision: controller.current.revision,
-    };
+    return session.current.decisionState(controller.current.revision);
   }
   function log(action: string, detail: object) {
     events.current.push({ id: crypto.randomUUID(), time: Date.now(), action, ...detail });
     debug('review', 'info', action, detail);
   }
   function clear(message = '') {
-    operation.current = null;
-    aiCache.current.stages.clear();
-    aiCache.current.plan = null;
+    session.current.reset();
     discardDownload();
     setConfirmAction(null);
     setOmissionNotice('');
@@ -261,22 +242,10 @@ export default function Home() {
     debugTrace.current.clear();
     initialCandidates.current = [];
     setDebugTick((t) => t + 1);
-    request.current++;
-    editRevision.current++;
-    aiAbort.current?.abort();
-    aiAbort.current = null;
     setAiBusy(false);
     setAiProgress('');
     setColumnMeta({});
-    digest.current = '';
-    worker.current?.terminate();
-    worker.current = null;
-    if (workerTimer.current) clearTimeout(workerTimer.current);
-    workerTimer.current = null;
-    workerReject.current?.(Error('Processing canceled.'));
-    workerReject.current = null;
     setBusy(false);
-    bytes.current = null;
     events.current = [];
     controller.current = createReviewController();
     setSelectedCells([]);
@@ -290,47 +259,30 @@ export default function Home() {
     setReason('');
     setDownloaded(false);
     setGroup('');
-    grace.current = 0;
     setError(message);
   }
   useEffect(() => {
-    const touch = () => {
-      active.current = Date.now();
-    };
+    const touch = () => session.current.touch();
     window.addEventListener('pointerdown', touch);
     window.addEventListener('keydown', touch);
     const timer = setInterval(() => {
-      if (bytes.current) {
-        const remaining = Math.min(
-          3600000 - (Date.now() - active.current),
-          28800000 - (Date.now() - born.current),
-          grace.current ? grace.current - Date.now() : Infinity,
-        );
+      const lifetime = session.current.lifetime();
+      if (lifetime) {
         setSessionWarning(
-          remaining <= 300000
-            ? Date.now() - born.current >= 28500000
+          lifetime.remaining <= 300000
+            ? lifetime.absoluteWarning
               ? 'The 8-hour session limit is approaching. Download your completed file now. This limit cannot be extended.'
-              : `This temporary session ends in about ${Math.max(1, Math.ceil(remaining / 60000))} minutes. Download your completed file before it ends.`
+              : `This temporary session ends in about ${Math.max(1, Math.ceil(lifetime.remaining / 60000))} minutes. Download your completed file before it ends.`
             : '',
         );
+        if (lifetime.expired) clear('Session expired. Upload the proposal again to continue.');
       }
-      if (
-        bytes.current &&
-        (Date.now() - active.current > 3600000 ||
-          Date.now() - born.current > 28800000 ||
-          (grace.current && Date.now() > grace.current))
-      )
-        clear('Session expired. Upload the proposal again to continue.');
     }, 5000);
     return () => {
       clearInterval(timer);
       window.removeEventListener('pointerdown', touch);
       window.removeEventListener('keydown', touch);
-      aiAbort.current?.abort();
-      worker.current?.terminate();
-      workerReject.current?.(Error('Page closed.'));
-      if (workerTimer.current) clearTimeout(workerTimer.current);
-      bytes.current = null;
+      session.current.dispose();
       events.current = [];
       debugTrace.current.clear();
       initialCandidates.current = [];
@@ -397,7 +349,7 @@ export default function Home() {
     return () => life.abort();
   }, []);
   async function upload(file: File, confirmed = false) {
-    if (bytes.current && !confirmed) {
+    if (session.current.sourceBytes && !confirmed) {
       setConfirmAction({
         title: 'Replace this proposal?',
         message: 'The current proposal and review decisions will be cleared.',
@@ -406,7 +358,7 @@ export default function Home() {
       return;
     }
     clear();
-    const generation = request.current;
+    const generation = session.current.generation;
     setBusy(true);
     debug('upload', 'running', 'Checking uploaded workbook.', { name: file.name, size: file.size });
     try {
@@ -416,54 +368,16 @@ export default function Home() {
         );
       if (file.size > 20 * 1024 * 1024) throw Error('Maximum upload is 20 MiB.');
       const b = new Uint8Array(await file.arrayBuffer());
-      if (generation !== request.current) return;
+      if (generation !== session.current.generation) return;
       debug('upload', 'passed', 'File checks passed.');
       debug('parse', 'running', 'Reading workbook in the parser worker.');
-      const parsed = await new Promise<{ workbook: Book; result: ReturnType<typeof extract> }>(
-        (resolve, reject) => {
-          const w = new Worker(parserWorkerURL, { type: 'module' });
-          worker.current = w;
-          workerReject.current = reject;
-          const timer = setTimeout(() => {
-            w.terminate();
-            reject(
-              Error(
-                'Workbook processing timed out after 60 seconds. Try a smaller workbook or manual handling.',
-              ),
-            );
-          }, 60000);
-          workerTimer.current = timer;
-          w.onmessage = (e) => {
-            if (e.data.progress) {
-              if (generation === request.current)
-                debug(
-                  e.data.progress.stage,
-                  e.data.progress.status,
-                  e.data.progress.message,
-                  e.data.progress.detail,
-                );
-              return;
-            }
-            clearTimeout(timer);
-            workerTimer.current = null;
-            workerReject.current = null;
-            w.terminate();
-            worker.current = null;
-            if (e.data.error) reject(Error(e.data.error));
-            else resolve(e.data);
-          };
-          w.onerror = () => {
-            clearTimeout(timer);
-            workerTimer.current = null;
-            workerReject.current = null;
-            w.terminate();
-            worker.current = null;
-            reject(Error('Workbook worker failed. Please retry.'));
-          };
-          w.postMessage({ bytes: b, filename: file.name, debug: PIPELINE_DEBUG_ENABLED });
-        },
-      );
-      if (generation !== request.current) return;
+      const parsed = await parseWorkbookInWorker({
+        session: session.current, generation, bytes: b, filename: file.name,
+        debug: PIPELINE_DEBUG_ENABLED,
+        createWorker: () => new Worker(parserWorkerURL, { type: 'module' }),
+        progress: event => debug(event.stage, event.status, event.message, event.detail),
+      });
+      if (generation !== session.current.generation) return;
       const wb = parsed.workbook;
       const result = parsed.result;
       prepareDescriptions(result.records, wb);
@@ -471,12 +385,10 @@ export default function Home() {
       controller.current.requireEvaluation();
       automateBoundaries(controller.current, result.records, wb);
       if (PIPELINE_DEBUG_ENABLED) initialCandidates.current = structuredClone(result.records);
-      digest.current = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', b)))
+      const sourceDigest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', b)))
         .map((x) => x.toString(16).padStart(2, '0'))
         .join('');
-      if (generation !== request.current) return;
-      bytes.current = b;
-      born.current = active.current = Date.now();
+      if (!session.current.acceptSource(generation, b, sourceDigest)) return;
       setBook(wb);
       setItems(controller.current.automate(result.records, wb));
       setSelected(result.records[0]?.id || '');
@@ -497,19 +409,19 @@ export default function Home() {
       setPage(0);
       log('upload', { name: file.name, cells: wb.population });
     } catch (e) {
-      if (generation === request.current) {
+      if (generation === session.current.generation) {
         const message = (e as Error).message;
         setError(message);
         debug('upload', 'failed', message);
       }
     } finally {
-      if (generation === request.current) setBusy(false);
+      if (generation === session.current.generation) setBusy(false);
       if (input.current) input.current.value = '';
     }
   }
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (bytes.current) {
+      if (session.current.sourceBytes) {
         event.preventDefault();
         event.returnValue = '';
       }
@@ -524,7 +436,7 @@ export default function Home() {
     controller.current.record(before, after, action);
     if (verifyFormula && book) controller.current.approveFormula(after, book, action);
     if (book) controller.current.automate([after], book);
-    editRevision.current++;
+    session.current.reviewChanged();
     setItems((prev) => prev.map((r) => (r.id === id ? after : r)));
     setDownloaded(false);
     setCoverage(false);
@@ -593,7 +505,7 @@ export default function Home() {
       records: items,
       columns,
       name,
-      digest: digest.current,
+      digest: session.current.sourceDigest,
       templateDigest: templateHash,
       controller: controller.current,
       columnMeta,
@@ -617,8 +529,8 @@ export default function Home() {
   }, [items, columns, coverage, book, blockers]);
   function beginGroup(value: string) {
     groupPlan.current = {
-      revision: editRevision.current,
-      generation: request.current,
+      revision: session.current.reviewRevision,
+      generation: session.current.generation,
       records: structuredClone(scoped.filter((r) => batchFields(r, value, book).length)),
       token: captureDecision(decisionState()),
     };
@@ -629,8 +541,8 @@ export default function Home() {
     if (
       !plan ||
       !plan.records.length ||
-      plan.revision !== editRevision.current ||
-      plan.generation !== request.current
+      plan.revision !== session.current.reviewRevision ||
+      plan.generation !== session.current.generation
     ) {
       setError('This batch changed after its preview. Reopen it to review the current values.');
       setGroup('');
@@ -643,7 +555,7 @@ export default function Home() {
       setGroup('');
       return;
     }
-    editRevision.current++;
+    session.current.reviewChanged();
     const ids = new Set(plan.records.map((r) => r.id));
     const next = items.map((r) => {
       if (!ids.has(r.id)) return r;
@@ -674,9 +586,8 @@ export default function Home() {
   }
   async function download() {
     const token = captureDecision(decisionState());
-    const generation = request.current;
-    if (operation.current) return;
-    operation.current = 'export';
+    const generation = session.current.generation;
+    if (!session.current.beginExport()) return;
     setBusy(true);
     setError('');
     debug('readiness', 'running', 'Checking current review before export.');
@@ -686,11 +597,11 @@ export default function Home() {
       if (!res.ok) throw Error('Template unavailable.');
       const template = new Uint8Array(await res.arrayBuffer());
       assertCurrentDecision(token, decisionState());
-      if (!bytes.current) throw Error('The source session has expired.');
+      if (!session.current.sourceBytes) throw Error('The source session has expired.');
       const out = await exportReviewedWorkbook({
-        proposalBytes: bytes.current,
+        proposalBytes: session.current.sourceBytes,
         templateBytes: template,
-        expectedSourceDigest: digest.current,
+        expectedSourceDigest: session.current.sourceDigest,
         records: items,
         columns,
         name,
@@ -700,13 +611,12 @@ export default function Home() {
         observer: (e: any) => debug(e.stage, e.status, e.message, e.detail),
         assertCurrent: () => assertCurrentDecision(token, decisionState()),
       });
-      const url = URL.createObjectURL(
-        new Blob([out], {
+      const url = session.current.publishDownload(token, controller.current.revision, () =>
+        URL.createObjectURL(new Blob([out], {
           type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        }),
+        })),
       );
-      discardDownload();
-      saveURL.current = url;
+      setSaveFile(null);
       setSaveFile({ url, name: name.replace(/\.(xlsx|xlsm)$/i, '') + '-normalized.xlsx' });
       setDownloaded(true);
       log('workbook prepared', { rows: included, columns });
@@ -717,19 +627,18 @@ export default function Home() {
         { rows: included, columns },
       );
     } catch (e) {
-      if (generation === request.current) {
+      if (generation === session.current.generation) {
         setError((e as Error).message);
         debug('export', 'failed', (e as Error).message);
       }
     } finally {
-      if (generation === request.current) {
-        operation.current = null;
+      if (session.current.finishExport(generation)) {
         setBusy(false);
       }
     }
   }
   function splitItem() {
-    editRevision.current++;
+    session.current.reviewChanged();
     if (!item || !book) return;
     const s = book.sheets.find((s) => s.name === item.sheet)!;
     const parts = item.anchors.map((a) => {
@@ -753,7 +662,7 @@ export default function Home() {
     log('split source group', { original: item, parts });
   }
   function mergeItem() {
-    editRevision.current++;
+    session.current.reviewChanged();
     const other = items.find((r) => r.id === mergeId);
     if (!item || !other || item.id === other.id || item.sheet !== other.sheet) return;
     const merged = structuredClone(item);
@@ -786,23 +695,22 @@ export default function Home() {
     log('merge items', { originals: [item, other], merged });
   }
   async function runAI(discover = false) {
-    if (!book || !digest.current || operation.current) return;
+    if (!book || !session.current.sourceDigest || session.current.operation) return;
     const runId = crypto.randomUUID();
-    operation.current = runId;
+    const abort = session.current.beginAI(runId);
+    if (!abort) return;
     controller.current.requireEvaluation();
     setAiBusy(true);
     setAiProgress('Starting AI source checks…');
     setError('');
     discardDownload();
-    const generation = request.current;
-    const revision = editRevision.current;
-    const sourceDigest = digest.current;
-    const abort = new AbortController();
-    aiAbort.current = abort;
+    const generation = session.current.generation;
+    const revision = session.current.reviewRevision;
+    const sourceDigest = session.current.sourceDigest;
     const pipelineToken = capturePipeline({ ...decisionState(), runId });
     const check = () => {
       if (abort.signal.aborted) throw Error('AI processing canceled.');
-      assertCurrentPipeline(pipelineToken, { ...decisionState(), runId: operation.current });
+      assertCurrentPipeline(pipelineToken, { ...decisionState(), runId: session.current.operation });
     };
     const baseline = prepareNormalization(book, items, controller.current, columns);
     automaticGeneration.current = generation;
@@ -811,7 +719,7 @@ export default function Home() {
         book,
         baseline,
         sourceDigest,
-        sessionCache: aiCache.current,
+        sessionCache: session.current.cache,
         generation,
         revision,
         discover,
@@ -859,26 +767,24 @@ export default function Home() {
         { items: proposed.length, fieldExceptions: issues.length },
       );
     } catch (e) {
-      if (generation === request.current) {
+      if (generation === session.current.generation) {
         setAiProgress(
           abort.signal.aborted
             ? 'AI processing canceled. Click Retry AI processing to resume completed stages.'
             : 'AI processing stopped. Click Retry AI processing to resume completed stages.',
         );
         setError((e as Error).message);
-        debug('ai', 'failed', (e as Error).message, { completedStages: aiCache.current.stages.size });
+        debug('ai', 'failed', (e as Error).message, { completedStages: session.current.cache.stages.size });
       }
     } finally {
-      if (operation.current === runId) {
-        operation.current = null;
+      if (session.current.finishAI(runId)) {
         setAiBusy(false);
-        aiAbort.current = null;
       }
     }
   }
 
   useEffect(() => {
-    if (!book || busy || aiBusy || operation.current) return;
+    if (!book || busy || aiBusy || session.current.operation) return;
     const next = structuredClone(items);
     const startRevision = controller.current.revision;
     automateBoundaries(controller.current, next, book);
@@ -903,12 +809,12 @@ export default function Home() {
       !book ||
       busy ||
       aiBusy ||
-      operation.current ||
+      session.current.operation ||
       !aiConfig ||
-      automaticGeneration.current === request.current
+      automaticGeneration.current === session.current.generation
     )
       return;
-    automaticGeneration.current = request.current;
+    automaticGeneration.current = session.current.generation;
     if (!items.length) {
       setAiProgress(
         'Choose the item rows and columns first. AI will run automatically after mapping.',
@@ -931,7 +837,7 @@ export default function Home() {
         Number(end),
         Object.fromEntries(Object.entries(mapping).filter(([, v]) => v)),
       );
-      editRevision.current++;
+      session.current.reviewChanged();
       if (PIPELINE_DEBUG_ENABLED) initialCandidates.current = structuredClone(r);
       controller.current = createReviewController();
       controller.current.requireEvaluation();
@@ -1116,14 +1022,14 @@ export default function Home() {
       items={items}
       initial={initialCandidates.current}
       columns={columns}
-      revision={editRevision.current}
-      generation={request.current}
+      revision={session.current.reviewRevision}
+      generation={session.current.generation}
       args={{
         book,
         records: items,
         columns,
         name,
-        digest: digest.current,
+        digest: session.current.sourceDigest,
         templateDigest: templateHash,
         controller: controller.current,
         columnMeta,
@@ -1228,8 +1134,7 @@ export default function Home() {
               variant="outline"
               disabled={sessionWarning.includes('8-hour')}
               onClick={() => {
-                grace.current = 0;
-                active.current = Date.now();
+                session.current.continueReview();
                 setSessionWarning('');
               }}
             >
@@ -1380,7 +1285,7 @@ export default function Home() {
                   </p>
                   <div className="buttons">
                     {aiBusy ? (
-                      <Button variant="outline" onClick={() => aiAbort.current?.abort()}>
+                      <Button variant="outline" onClick={() => session.current.cancelAI()}>
                         Cancel AI processing
                       </Button>
                     ) : (
@@ -1898,7 +1803,7 @@ export default function Home() {
                             aria-pressed={status === 'approved'}
                             disabled={busy || aiBusy}
                             onClick={() => {
-                              editRevision.current++;
+                              session.current.reviewChanged();
                               setColumns(
                                 approveExtraInformation({
                                   columns,
@@ -1925,7 +1830,7 @@ export default function Home() {
                             aria-pressed={status === 'declined'}
                             disabled={busy || aiBusy}
                             onClick={() => {
-                              editRevision.current++;
+                              session.current.reviewChanged();
                               try {
                                 const next = declineExtraInformation({
                                   book,
@@ -2128,7 +2033,7 @@ export default function Home() {
                                         sheet: g.sheet,
                                         addresses: g.addresses,
                                       });
-                                      editRevision.current++;
+                                      session.current.reviewChanged();
                                       setCoverageTick((t) => t + 1);
                                       setCoverage(false);
                                       setDownloaded(false);
@@ -2431,7 +2336,7 @@ export default function Home() {
                             try {
                               if (!sourceIndex) return;
                               applyCoverage(controller.current, sourceIndex, coveragePlan);
-                              editRevision.current++;
+                              session.current.reviewChanged();
                               setCoverageTick((t) => t + 1);
                               setCoverage(false);
                               setDownloaded(false);
@@ -2495,7 +2400,7 @@ export default function Home() {
                           try {
                             if (!sourceIndex) return;
                             approveLayout(controller.current, sourceIndex, sheet, reason);
-                            editRevision.current++;
+                            session.current.reviewChanged();
                             setCoverageTick((t) => t + 1);
                             setCoverage(false);
                             setDownloaded(false);
@@ -2528,7 +2433,7 @@ export default function Home() {
                           sourceIndex &&
                           checkCoverage(controller.current, sourceIndex, columns).length === 0
                         ) {
-                          editRevision.current++;
+                          session.current.reviewChanged();
                           setCoverage(true);
                           log('approve complete source coverage', {
                             reason: 'Reviewer confirmed all sheets and current source decisions.',
@@ -2779,7 +2684,7 @@ export default function Home() {
                         href={saveFile.url}
                         download={saveFile.name}
                         onClick={() => {
-                          grace.current = Date.now() + 900000;
+                          session.current.downloadRequested();
                           log('download requested', { rows: included });
                         }}
                       >
@@ -2797,8 +2702,7 @@ export default function Home() {
                       <Button
                         variant="outline"
                         onClick={() => {
-                          grace.current = 0;
-                          active.current = Date.now();
+                          session.current.continueReview();
                           setDownloaded(false);
                           setTab('items');
                         }}
@@ -2866,7 +2770,7 @@ export default function Home() {
                     </p>
                   ))}
                 </div>
-                {groupPlan.current?.revision !== editRevision.current && (
+                {groupPlan.current?.revision !== session.current.reviewRevision && (
                   <p role="alert">
                     The information changed since this preview opened. Close it and start a new
                     review.
@@ -2875,7 +2779,7 @@ export default function Home() {
                 <Button
                   disabled={
                     !groupPlan.current?.records.length ||
-                    groupPlan.current?.revision !== editRevision.current
+                    groupPlan.current?.revision !== session.current.reviewRevision
                   }
                   onClick={batch}
                 >
