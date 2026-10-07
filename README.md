@@ -19,9 +19,19 @@ Limits: 20 MiB upload; 200 MiB expanded ZIP; 10,000 members; 50 sheets; 1 millio
 
 ## Build and verification
 
-Run `npm run install:ci`, `npx tsc --noEmit`, `npm run lint`, and `npm run build` through the Sites build workflow. `node tests/workbook.test.mjs` requires the original attachments and source-backed expected-record package in the parent folder; those customer workbooks are deliberately not checked into this repository or hosted. Tests passed on all five original workbooks, including occurrence counts and anchors, source provenance, packaging-conflict routing, leading-zero identity, zero usage, literal formula-looking text, unchanged other worksheet bytes, review gates and invalid inputs.
+Use `npm ci`, supply the pinned private fixtures as described in
+[Verification](docs/verification.md), and run `npm run verify`. This checks all
+registered JavaScript tests, TypeScript, the Python validator and the production
+build. `npm run verify:core` is the smaller public-data CI check. Every new test
+must be assigned to a suite in `tests/verification-suites.json`; neither profile
+silently accepts unclassified tests. Customer workbooks and expected-record
+fixtures are not checked into this repository or hosted.
 
-Browser UI and WebMCP execution have not been validated in this environment: the required control-browser capability is unavailable. WebMCP exposes only a read-only current-status tool, with input validation and no approval/export action.
+Browser and live AI acceptance are separate from automated verification. See the
+current acceptance checklist and record passed, failed or blocked evidence for
+each proposal. Historical notes below describe earlier checks and limitations;
+they are not the current release acceptance record. WebMCP exposes only a
+read-only current-status tool, with input validation and no approval/export action.
 
 ## Remaining before the complete AI prototype is accepted
 

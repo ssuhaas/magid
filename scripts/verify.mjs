@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { checkFixtures, projectRoot, manifest } from '../tests/helpers/fixtures.mjs';
+import { loadTestPlan } from './verification-plan.mjs';
 
 process.chdir(projectRoot);
 const args = process.argv.slice(2);
@@ -51,6 +52,10 @@ function run(name, command, args, timeout = 300000) {
 }
 
 try {
+  const { selected, excluded } = loadTestPlan(profile, projectRoot);
+  report.testFiles = selected;
+  report.excludedTestFiles = excluded;
+  report.stages.push({ name: 'test-plan', status: 'passed', count: selected.length });
   if (profile === 'full') {
     checkFixtures();
     report.stages.push({ name: 'fixtures', status: 'passed', count: manifest.files.length });
@@ -59,12 +64,6 @@ try {
   }
   const pythonVersion = run('python-version', python, ['--version']);
   report.pythonVersion = (pythonVersion.stdout || pythonVersion.stderr).trim();
-  const tests = readdirSync('tests').filter(name => name.endsWith('.test.mjs')).sort();
-  // This profile excludes entire files that need private fixtures; no tests are silently skipped.
-  const selected = profile === 'full' ? tests : tests.filter(name => !readFileSync(`tests/${name}`, 'utf8').includes('./helpers/fixtures.mjs'));
-  if (!selected.length) throw Error('No test files selected.');
-  report.testFiles = selected;
-  report.excludedTestFiles = tests.filter(name => !selected.includes(name));
   run('javascript-tests', process.execPath, ['--test', ...selected.map(name => `tests/${name}`)]);
   run('types', process.execPath, ['node_modules/typescript/bin/tsc', '--noEmit', '--incremental', 'false']);
   run('python-validator-tests', python, ['-m', 'unittest', 'discover', '-s', 'lib/canonical/reference', '-p', 'test_*.py']);
