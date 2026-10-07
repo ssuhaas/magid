@@ -1,19 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync } from './helpers/fixtures.mjs';
 import { readWorkbook, extract } from '../lib/workbook.mjs';
 import { createReviewController, buildCanonical } from '../lib/canonical/bridge.mjs';
 import { automateBoundaries } from '../lib/canonical/pipeline.mjs';
 import { packagingConflict, labeledPackCount } from '../lib/canonical/source-facts.mjs';
 import { buildScope } from '../lib/ai/client.mjs';
 
-// Compatible with PR #2's pinned fixture setup and the existing parent workspace.
-const fixtureRoot = resolve(process.env.MAGID_FIXTURE_ROOT ||
-  (existsSync('tests/fixtures/attachments') ? 'tests/fixtures' : '..'));
 function setup() {
-  const book = readWorkbook(readFileSync(resolve(fixtureRoot,
-    'attachments/e6f63120-98ee-4723-92b3-e6959045d7c5/TESLA PPE RFP April 2025.xlsx')));
+  const book = readWorkbook(readFileSync(
+    '../attachments/e6f63120-98ee-4723-92b3-e6959045d7c5/TESLA PPE RFP April 2025.xlsx'));
   const records = extract(book).records;
   const controller = createReviewController();
   automateBoundaries(controller, records, book);

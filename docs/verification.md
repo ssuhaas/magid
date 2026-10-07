@@ -41,12 +41,26 @@ expected records and manifest hashes together.
 
 ## GitHub checks
 
-`npm run verify:core` checks only the test files that do not require private
-fixtures, plus TypeScript, Python validation and the build. The GitHub workflow
+`tests/verification-suites.json` explicitly assigns every JavaScript test file
+to `core` (no private inputs) or `workbook` (requires the pinned fixture set).
+Both verification commands reject unclassified, missing or duplicate test files.
+When adding a test, register it here; use the shared fixture helper for private
+workbook reads instead of guessing a parent-directory path. A core test must not
+depend on private data, including through another module.
+
+`npm run verify:core` checks only the registered core files, plus TypeScript,
+Python validation and the build. The GitHub workflow
 runs this profile on PRs and main pushes and saves its logs/report for seven days.
 Its report explicitly lists excluded test files. A green core check does **not**
 mean the real-workbook suite or live AI has passed. Before merging, also record
 the full local verification result. CI does not use provider keys or call a model.
+
+If CI fails, inspect its job steps and saved logs before changing the workflow.
+A job that never starts is a runner problem; a test failing after checkout is a
+code or verification problem. Neither is a successful check. The 2026-10-06 main
+run obtained a runner but failed because the old import-text heuristic selected
+the private Tesla packaging test for core; explicit suite registration fixes that
+selection error without reducing full-suite coverage.
 
 ## Browser and live AI acceptance
 
