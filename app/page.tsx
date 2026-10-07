@@ -3,7 +3,6 @@
 import {
   automateBoundaries,
   automateCoverage,
-  applyEvaluationFindings,
   pruneRedundantExtras,
 } from '@/lib/canonical/pipeline.mjs';
 import { prepareDescriptions } from '@/lib/description-policy.mjs';
@@ -80,14 +79,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { processProposalScopes } from '@/lib/ai/process-proposal.mjs';
-import { buildScope, applyExtractionIssues } from '@/lib/ai/client.mjs';
+import {
+  createNormalizationCache, prepareNormalization, runNormalization, finalizeNormalization,
+} from '@/lib/ai/normalize-proposal.mjs';
 import { createReviewController } from '@/lib/canonical/bridge.mjs';
 import { extract, mapRows, checkReady, makeRecord } from '@/lib/workbook.mjs';
 import { fieldContracts } from '@/lib/canonical/field-contracts.mjs';
 import { finalReadiness, exportReviewedWorkbook } from '@/lib/canonical/export.mjs';
 import type { Book, Field, Item, SourceSelection } from '@/lib/review-types';
-import type { ColumnMetadata, SourceScope, StageCache } from '@/lib/ai/types';
+import type { ColumnMetadata } from '@/lib/ai/types';
 export default function Home() {
   const debugTrace = useRef(createTrace());
   const initialCandidates = useRef<Item[]>([]);
@@ -150,8 +150,7 @@ export default function Home() {
   const [outputOpen, setOutputOpen] = useState(false);
   const automaticGeneration = useRef(-1);
   const operation = useRef<string | null>(null);
-  const stageCache = useRef<StageCache>(new Map());
-  const scopeCache = useRef<{ key: string; scopes: SourceScope[] } | null>(null);
+  const aiCache = useRef(createNormalizationCache());
   const saveURL = useRef('');
   const [saveFile, setSaveFile] = useState<{ url: string; name: string } | null>(null);
   function discardDownload() {
@@ -235,8 +234,8 @@ export default function Home() {
   }
   function clear(message = '') {
     operation.current = null;
-    stageCache.current.clear();
-    scopeCache.current = null;
+    aiCache.current.stages.clear();
+    aiCache.current.plan = null;
     discardDownload();
     setConfirmAction(null);
     setOmissionNotice('');
@@ -805,64 +804,19 @@ export default function Home() {
       if (abort.signal.aborted) throw Error('AI processing canceled.');
       assertCurrentPipeline(pipelineToken, { ...decisionState(), runId: operation.current });
     };
-    const baseline = structuredClone(items);
-    automateBoundaries(controller.current, baseline, book);
-    controller.current.automate(baseline, book);
-    automateCoverage(controller.current, book, baseline, columns);
+    const baseline = prepareNormalization(book, items, controller.current, columns);
     automaticGeneration.current = generation;
     try {
-      const key = JSON.stringify([
-        generation,
-        revision,
-        sourceDigest,
-        discover,
-        sheet,
-        start,
-        end,
-        baseline.map((r) => [
-          r.id,
-          r.anchors,
-          Object.fromEntries(Object.entries(r.values).map(([k, f]) => [k, f.value])),
-        ]),
-      ]);
-      if (scopeCache.current?.key !== key) {
-        stageCache.current.clear();
-        scopeCache.current = {
-          key,
-          scopes: discover
-            ? [
-                buildScope(book, [], {
-                  mode: 'discover',
-                  digest: sourceDigest,
-                  scopeId: crypto.randomUUID(),
-                  sheet,
-                  start: Number(start),
-                  end: Number(end),
-                }),
-              ]
-            : Array.from({ length: Math.ceil(baseline.length / 3) }, (_, i) =>
-                buildScope(book, baseline.slice(i * 3, i * 3 + 3), {
-                  digest: sourceDigest,
-                  scopeId: crypto.randomUUID(),
-                  targeted: true,
-                }),
-              ),
-        };
-      }
-      const scopes = scopeCache.current.scopes;
-      debug('ai', 'planned', 'AI generation is limited to unresolved fields; independent source checks cover every item.', {
-        groups: scopes.length,
-        items: baseline.length,
-        concurrency: aiConfig?.concurrency || 2,
-        requestedFields: scopes.flatMap((s) => s.records).reduce((n, r) => n + (r.requestedColumns?.length ?? 12), 0),
-      });
-      const { proposed, metadata, notices, evaluations, issues } = await processProposalScopes({
+      const result = await runNormalization({
         book,
         baseline,
-        scopes,
         sourceDigest,
+        sessionCache: aiCache.current,
+        generation,
+        revision,
+        discover,
+        selection: { sheet, start, end },
         concurrency: aiConfig?.concurrency || 2,
-        cache: stageCache.current,
         check,
         signal: abort.signal,
         observer: (event) =>
@@ -872,17 +826,10 @@ export default function Home() {
           setAiProgress(message);
         },
       });
-      // The extracted async operation yields before returning; recheck ownership before commit.
-      check();
-      applyEvaluationFindings(proposed, evaluations, controller.current);
-      pruneRedundantExtras(proposed, columns);
-      controller.current.reconcile(baseline, proposed);
-      automateBoundaries(controller.current, proposed, book);
-      controller.current.automate(proposed, book);
-      controller.current.evaluate(proposed, book, evaluations);
-      applyExtractionIssues(proposed, issues, book);
-      // Quarantined fields cannot retain a prior automatic approval.
-      controller.current.automate(proposed, book);
+      const { metadata, notices, issues } = result;
+      const proposed = finalizeNormalization({
+        book, baseline, result, controller: controller.current, columns, check,
+      });
       setItems(proposed);
       setSelected(proposed[0]?.id || '');
       setColumns((prev) => ({
@@ -919,7 +866,7 @@ export default function Home() {
             : 'AI processing stopped. Click Retry AI processing to resume completed stages.',
         );
         setError((e as Error).message);
-        debug('ai', 'failed', (e as Error).message, { completedStages: stageCache.current.size });
+        debug('ai', 'failed', (e as Error).message, { completedStages: aiCache.current.stages.size });
       }
     } finally {
       if (operation.current === runId) {

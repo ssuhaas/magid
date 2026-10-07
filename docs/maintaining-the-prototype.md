@@ -14,6 +14,7 @@ do not establish accuracy on a new proposal layout or provider response.
 | `lib/ai/process-proposal.mjs`                          | Stage source groups, validate responses, split oversized/timed-out groups, collect results                |
 | `lib/ai/stages.mjs`                                    | Request deadlines, temporary stage cache, busy-service waits, and retry                                   |
 | `lib/ai/types.ts`                                     | Schema-derived AI payload types, temporary cache state and processing boundary contracts                 |
+| `lib/ai/normalize-proposal.mjs`                        | Deterministic preparation, retry scope planning, AI runner and guarded synchronous policy application    |
 | `lib/ai/client.mjs`, `contracts.mjs`, `evaluation.mjs` | Evidence scopes, response contracts, and source-grounded candidate application                            |
 | `app/api/extract/route.ts`, `lib/ai/service.mjs`       | Authenticated requests, leases, rate limits, and provider adapters                                        |
 | `lib/canonical/`                                       | Independent approval authority, source rules, dependent-field invalidation, coverage, and final readiness |
@@ -37,7 +38,30 @@ do not establish accuracy on a new proposal layout or provider response.
 - No proposal history, durable review state, or new provider calls belong in a
   readability-only refactor.
 
-## Verification
+## Normalization runner boundary
+
+The page owns session lifetime, cancellation, the current-run guard and React
+state. `prepareNormalization` clones the current records and applies the existing
+deterministic policies. `runNormalization` accepts parsed workbook data and a
+temporary cache, builds the same targeted three-item groups (or selected discovery
+region), and stages extraction plus independent evaluation. It does not change
+controller proofs or publish records while waiting for AI.
+
+After the await, `finalizeNormalization` calls the supplied ownership guard before
+applying the existing evaluation/reconciliation/automation sequence. The caller
+publishes those records synchronously, without another await. A stale or canceled
+run cannot change proofs during finalization. Scope splitting and completed stage
+responses remain in the supplied cache for retry; the page clears them on reset.
+
+This API can be called without React. It starts from parsed records and does not
+add a durable worker, queue, persistence, matching handoff or export permission.
+The separate canonical export gate remains authoritative. Interaction cases cover
+retry, cache invalidation, discovery and stale/canceled finalization. Five-workbook
+parity cases compare records, controller proofs (excluding event timestamps),
+review counts and final blockers with the prior page sequence, using controlled
+responses. They establish refactor parity, not live AI accuracy.
+
+## Verification commands
 
 Use [Repeatable verification](verification.md) for setup, one-command checks,
 reports, CI scope and the browser/live-AI acceptance checklist. After fixture
@@ -59,7 +83,9 @@ authoritative reference schema as part of application cleanup.
 
 ## Remaining technical debt
 
-- `app/page.tsx` still coordinates many coupled concerns. Further extraction should
+- AI preparation, scope planning, processing and policy application now live in
+  the normalization runner. `app/page.tsx` still coordinates coupled session and
+  UI concerns. Further extraction should
   follow feature boundaries and include interaction tests for session replacement,
   cancellation, stale decisions, and export invalidation. Moving all state into a
   generic hook would mostly relocate the coupling.

@@ -2,6 +2,7 @@ import type { z } from 'zod';
 import type { requestSchema, responseSchema } from './contracts.mjs';
 import type { evaluationSchema, evaluationRequestSchema } from './evaluation.mjs';
 import type { Book, Item } from '../review-types';
+import type { createReviewController } from '../canonical/bridge.mjs';
 
 // Derive wire payloads from the runtime validators, rather than maintaining copies.
 // These types describe data shape; they never grant controller approval.
@@ -90,4 +91,27 @@ export type ProposalProcessingResult = {
   notices: string[];
   evaluations: Evaluation[];
   issues: ExtractionIssue[];
+};
+
+export type ReviewController = ReturnType<typeof createReviewController>;
+export type ColumnDecisions = Record<string, string>;
+export type NormalizationCache = {
+  stages: StageCache;
+  plan: { key: string; scopes: SourceScope[] } | null;
+};
+export type NormalizationOptions = Omit<ProposalProcessingOptions, 'scopes' | 'cache'> & {
+  sessionCache: NormalizationCache;
+  generation: number;
+  revision: number;
+  discover: boolean;
+  /** Keep raw selection strings in the retry key; convert only when building scopes. */
+  selection: { sheet: string; start: string; end: string };
+};
+export type FinalizeNormalizationOptions = {
+  book: Book;
+  baseline: Item[];
+  result: ProposalProcessingResult;
+  controller: ReviewController;
+  columns: ColumnDecisions;
+  check: () => void;
 };

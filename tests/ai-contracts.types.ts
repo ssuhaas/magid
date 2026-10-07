@@ -5,6 +5,8 @@ import type {
   ProposalProcessingOptions, EvaluatedProposal,
 } from '../lib/ai/types';
 import { processProposalScopes } from '../lib/ai/process-proposal.mjs';
+import { runNormalization, finalizeNormalization } from '../lib/ai/normalize-proposal.mjs';
+import type { NormalizationOptions, ReviewController } from '../lib/ai/types';
 
 declare const scope: SourceScope;
 declare const proposal: Proposal;
@@ -12,11 +14,15 @@ declare const evaluation: Evaluation;
 declare const extracted: ExtractionResult;
 declare const evaluated: EvaluationResult;
 declare const options: ProposalProcessingOptions;
+declare const normalization: NormalizationOptions;
+declare const result: ProposalProcessingResult;
+declare const controller: ReviewController;
 
 const retryState: StageCacheEntry = { scope, extract: extracted, evaluate: evaluated };
 const initialState: StageCacheEntry = { scope };
 const output: Promise<ProposalProcessingResult> = processProposalScopes(options);
-void [retryState, initialState, output];
+const normalized: Promise<ProposalProcessingResult> = runNormalization(normalization);
+void [retryState, initialState, output, normalized];
 
 // @ts-expect-error Wire mode is constrained by the existing runtime request schema.
 const invalidScope: SourceScope = { ...scope, mode: 'approve' };
@@ -34,4 +40,8 @@ processProposalScopes({ ...options, cache: new Map<string, string>() });
 const invalidProposal: Proposal = evaluation;
 // @ts-expect-error Model candidates cannot assert reviewer approval.
 const approvedProposal: Proposal = { ...proposal, approved: true };
+// @ts-expect-error Finalization must receive the session ownership guard.
+finalizeNormalization({ book: options.book, baseline: options.baseline, result, controller, columns: {} });
+// @ts-expect-error Retry state must have a typed stage cache, not arbitrary strings.
+runNormalization({ ...normalization, sessionCache: { stages: new Map<string, string>(), plan: null } });
 void [invalidScope, invalidColumn, incompleteEvidence, invalidCache, incompleteResult, invalidProposal, approvedProposal];
