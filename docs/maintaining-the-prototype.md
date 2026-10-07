@@ -15,6 +15,8 @@ do not establish accuracy on a new proposal layout or provider response.
 | `lib/ai/stages.mjs`                                    | Request deadlines, temporary stage cache, busy-service waits, and retry                                   |
 | `lib/ai/types.ts`                                     | Schema-derived AI payload types, temporary cache state and processing boundary contracts                 |
 | `lib/ai/normalize-proposal.mjs`                        | Deterministic preparation, retry scope planning, AI runner and guarded synchronous policy application    |
+| `lib/session/coordinator.mjs`                         | Temporary source ownership, operation locks, resource cleanup, retry cache, download URLs and clocks     |
+| `lib/session/parse-workbook.mjs`                      | Parser worker transport, current-owner progress, timeout and completion cleanup                         |
 | `lib/ai/client.mjs`, `contracts.mjs`, `evaluation.mjs` | Evidence scopes, response contracts, and source-grounded candidate application                            |
 | `app/api/extract/route.ts`, `lib/ai/service.mjs`       | Authenticated requests, leases, rate limits, and provider adapters                                        |
 | `lib/canonical/`                                       | Independent approval authority, source rules, dependent-field invalidation, coverage, and final readiness |
@@ -61,6 +63,35 @@ parity cases compare records, controller proofs (excluding event timestamps),
 review counts and final blockers with the prior page sequence, using controlled
 responses. They establish refactor parity, not live AI accuracy.
 
+## Session ownership
+
+The page uses one session coordinator instead of separate refs for source bytes,
+digest, generation/review revision, parser resources, AI ownership, retry caches,
+download URL and expiry clocks. Its source and operation properties are read-only;
+transitions use explicit methods. React still owns user-facing statuses, dialogs
+and selections. The review controller and canonical decision guards remain the
+approval authority.
+
+Reset invalidates owners before canceling resources, clears the retry cache and
+revokes the prepared download. AI cancellation retains completed stage results
+for retry, and only the matching run can finish its operation. Parser completion
+releases only its own resource; late old-worker events cannot detach a replacement.
+Page close also releases source bytes, cache and object URLs. No persistence or
+provider changes are introduced.
+
+Source installation now checks the upload generation before changing either bytes
+or digest. Previously a late hash could write its digest before the page's stale
+check. Download publication repeats the existing decision guard after the final
+export await, before creating a URL. These close ownership races without changing
+normalization or review policies. Manual edits also revoke prepared downloads
+immediately; the existing React effect clears the visible save link.
+
+Expiry retains the one-hour idle, eight-hour absolute and fifteen-minute download
+grace limits. Continue-review refreshes activity and removes grace without moving
+the absolute start time. Tests cover source replacement, queued cancellation and
+retry, old-owner cleanup, stale export returns, worker success/failure/timeout,
+URL cleanup and exact expiry boundaries. Browser acceptance is still separate.
+
 ## Verification commands
 
 Use [Repeatable verification](verification.md) for setup, one-command checks,
@@ -84,8 +115,9 @@ authoritative reference schema as part of application cleanup.
 ## Remaining technical debt
 
 - AI preparation, scope planning, processing and policy application now live in
-  the normalization runner. `app/page.tsx` still coordinates coupled session and
-  UI concerns. Further extraction should
+  the normalization runner. Session ownership and resource transitions now live
+  in the coordinator. `app/page.tsx` still coordinates React display state and
+  the review/mapping/coverage views. Further extraction should
   follow feature boundaries and include interaction tests for session replacement,
   cancellation, stale decisions, and export invalidation. Moving all state into a
   generic hook would mostly relocate the coupling.
