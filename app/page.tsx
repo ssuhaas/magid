@@ -12,6 +12,12 @@ import {
   approveExtraInformation,
   omitProposalInformation,
 } from '@/lib/canonical/omissions.mjs';
+import { UploadView } from '@/components/workflow/upload-view';
+import { AiProcessingPanel } from '@/components/workflow/ai-processing-panel';
+import { ReviewOverview } from '@/components/workflow/review-overview';
+import { ReviewItemList } from '@/components/workflow/review-item-list';
+import { ReviewItemDetails } from '@/components/workflow/review-item-details';
+import { DownloadView } from '@/components/workflow/download-view';
 import { OutputPreview } from '@/components/review/output-preview';
 import { SourcePreview } from '@/components/review/source-preview';
 import { QuantityReview } from '@/components/review/quantity-review';
@@ -39,17 +45,7 @@ import { PipelineDebug } from '@/components/debug/pipeline-debug';
 import { PIPELINE_DEBUG_ENABLED, createTrace } from '@/lib/debug/trace.mjs';
 import parserWorkerURL from '../lib/parse.worker.ts?worker&url';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Upload,
-  FileSpreadsheet,
-  Check,
-  ArrowRight,
-  Download,
-  Search,
-  ShieldCheck,
-  AlertTriangle,
-  Layers,
-} from 'lucide-react';
+import { Check, ShieldCheck, AlertTriangle, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -80,10 +76,12 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
-  prepareNormalization, runNormalization, finalizeNormalization,
+  prepareNormalization,
+  runNormalization,
+  finalizeNormalization,
 } from '@/lib/ai/normalize-proposal.mjs';
 import { createReviewController } from '@/lib/canonical/bridge.mjs';
-import { extract, mapRows, checkReady, makeRecord } from '@/lib/workbook.mjs';
+import { mapRows, checkReady, makeRecord } from '@/lib/workbook.mjs';
 import { fieldContracts } from '@/lib/canonical/field-contracts.mjs';
 import { finalReadiness, exportReviewedWorkbook } from '@/lib/canonical/export.mjs';
 import type { Book, Field, Item, SourceSelection } from '@/lib/review-types';
@@ -1157,104 +1155,37 @@ export default function Home() {
         {!book ? (
           <>
             {tab === 'debug' && PIPELINE_DEBUG_ENABLED && debugPanel}
-            <section
-              className="upload"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (!busy && e.dataTransfer.files[0]) void upload(e.dataTransfer.files[0]);
-              }}
-            >
-              <Upload size={32} />
-              <h2>{busy ? 'Reading your proposal…' : 'Upload a bid proposal'}</h2>
-              <p>Drag an Excel file here, or choose one from your computer.</p>
-              <Button disabled={busy} onClick={() => input.current?.click()}>
-                Choose Excel file
-              </Button>
-              <small>.xlsx or .xlsm · Maximum 20 MB · Macros are never run</small>
-              {busy && (
-                <Button
-                  variant="ghost"
-                  onClick={() => clear('Processing canceled. Choose a file to start again.')}
-                >
-                  Cancel
-                </Button>
-              )}
-            </section>
-            <div className="upload-guide">
-              <p>
-                <strong>1. Upload</strong> Start with the customer’s Excel proposal.
-              </p>
-              <p>
-                <strong>2. Review</strong> Review flagged exceptions. Supported information is
-                accepted automatically.
-              </p>
-              <p>
-                <strong>3. Download</strong> Get the completed template, ready for inventory
-                matching.
-              </p>
-            </div>
+            <UploadView
+              busy={busy}
+              onUpload={(file) => void upload(file)}
+              onChoose={() => input.current?.click()}
+              onCancel={() => clear('Processing canceled. Choose a file to start again.')}
+            />
           </>
         ) : (
           <>
-            <div className="file-bar">
-              <FileSpreadsheet size={24} />
-              <div>
-                <strong>{name}</strong>
-                <small>
-                  {book.sheets.length} {book.sheets.length === 1 ? 'sheet' : 'sheets'} ·{' '}
-                  {stats.total} total items found · {stats.pendingItems} current exceptions
-                  {!processingComplete ? ' · source checks pending' : ''}
-                </small>
-              </div>
-              <Button variant="ghost" onClick={() => input.current?.click()}>
-                Replace file
-              </Button>
-            </div>
-            <section className="next-action">
-              <div aria-live="polite">
-                <h2>
-                  {aiBusy
-                    ? 'Checking extraction against the proposal…'
-                    : controller.current.evaluationRequired &&
-                        !controller.current.evaluationComplete
-                      ? 'AI source checks are not complete'
-                      : remaining.length
-                        ? `${remaining.length} ${remaining.length === 1 ? 'item needs' : 'items need'} your review`
-                        : items.length
-                          ? 'No item exceptions'
-                          : 'Help us identify the items'}
-                </h2>
-                <p>
-                  {stats.handledFields} of {stats.totalFields} fields handled · {fieldsPending}{' '}
-                  current field exceptions · {boundariesPending} item boundaries to confirm
-                </p>
-                <progress
-                  aria-label="Field review progress"
-                  max={Math.max(stats.totalFields, 1)}
-                  value={stats.handledFields}
-                />
-                <p>
-                  {stats.automaticItems} items handled automatically · {reviewed} items complete ·{' '}
-                  {excluded} excluded
-                  {pendingColumns
-                    ? ` · ${pendingColumns} extra ${pendingColumns === 1 ? 'column needs' : 'columns need'} a decision`
-                    : ''}
-                </p>
-                <p>
-                  AI source checks: {controller.current.evaluationComplete ? 'complete' : 'pending'}{' '}
-                  · Proposal coverage:{' '}
-                  {coverage ? 'complete' : `${coverageSummary?.unresolved || 0} cells unresolved`} ·
-                  Export: {blockers.length ? 'not ready' : 'ready'}
-                </p>
-                <progress
-                  aria-label="Item review progress"
-                  max={Math.max(items.length, 1)}
-                  value={stats.reviewed + stats.excluded}
-                />
-              </div>
-              <Button onClick={goNext}>{nextLabel}</Button>
-            </section>
+            <ReviewOverview
+              name={name}
+              sheetCount={book.sheets.length}
+              stats={stats}
+              processingComplete={processingComplete}
+              aiBusy={aiBusy}
+              evaluationRequired={controller.current.evaluationRequired}
+              evaluationComplete={controller.current.evaluationComplete}
+              remainingCount={remaining.length}
+              itemCount={items.length}
+              fieldsPending={fieldsPending}
+              boundariesPending={boundariesPending}
+              reviewed={reviewed}
+              excluded={excluded}
+              pendingColumns={pendingColumns}
+              coverage={coverage}
+              unresolvedCells={coverageSummary?.unresolved || 0}
+              blockerCount={blockers.length}
+              nextLabel={nextLabel}
+              onReplace={() => input.current?.click()}
+              onNext={goNext}
+            />
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList className="tabs">
                 <TabsTrigger value="items">Exceptions ({stats.pendingItems})</TabsTrigger>
@@ -1277,436 +1208,205 @@ export default function Home() {
                 )}
               </TabsList>
               <TabsContent value="items">
-                <section className="ai-panel" aria-label="AI processing">
-                  <strong>{aiBusy ? 'Preparing your proposal with AI…' : 'AI processing'}</strong>
-                  <p role="status">
-                    {aiProgress ||
-                      'AI starts automatically after upload. Verified copies and unsupported blanks do not need field approval.'}
-                  </p>
-                  <div className="buttons">
-                    {aiBusy ? (
-                      <Button variant="outline" onClick={() => session.current.cancelAI()}>
-                        Cancel AI processing
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        disabled={busy || !aiConfig?.configured || !items.length}
-                        onClick={() => void runAI()}
-                      >
-                        Retry AI processing
-                      </Button>
-                    )}
-                  </div>
-                </section>
+                <AiProcessingPanel
+                  aiBusy={aiBusy}
+                  aiProgress={aiProgress}
+                  retryDisabled={busy || !aiConfig?.configured || !items.length}
+                  onCancel={() => session.current.cancelAI()}
+                  onRetry={() => void runAI()}
+                />
                 <fieldset className="review-workspace" disabled={aiBusy || busy}>
                   <div className="workbench">
-                    <section className="records">
-                      <div className="panel-head">
-                        <h2>Item exceptions</h2>
-                        <Badge variant="outline">{stats.pendingItems} pending</Badge>
-                      </div>
-                      <p className="item-counts" aria-live="polite">
-                        {stats.total} total · {reviewed} complete · {stats.excluded} excluded
-                      </p>
-                      <div className="search">
-                        <Search size={18} />
-                        <Input
-                          aria-label="Search items"
-                          placeholder="Search description or code"
-                          value={query}
-                          onChange={(e) => {
-                            setQuery(e.target.value);
-                            setPage(0);
-                          }}
-                        />
-                      </div>
-                      <label className="filter">
-                        <Checkbox
-                          checked={reviewOnly}
-                          onCheckedChange={(v) => {
-                            setReviewOnly(v === true);
-                            setPage(0);
-                          }}
-                        />
-                        Only show exceptions
-                      </label>
-                      <div className="item-list">
-                        {visible.map((r) => (
-                          <button
-                            key={r.id}
-                            className={'record ' + (r.id === selected ? 'selected' : '')}
-                            aria-pressed={r.id === selected}
-                            onClick={() => setSelected(r.id)}
-                          >
-                            <strong>
-                              {r.values.E.value ||
-                                r.extras['Source Product ID']?.value ||
-                                'Item to identify'}
-                            </strong>
-                            <small>
-                              {r.sheet} · {r.anchors.join(', ')}
-                            </small>
-                            <Badge
-                              variant="outline"
-                              className={needsReview(r, columns, book) ? 'review' : 'ready'}
-                            >
-                              {r.boundary === 'exclude'
-                                ? 'Excluded'
-                                : needsReview(r, columns, book)
-                                  ? reviewStats([r], columns, null, book).pendingFields
-                                    ? `${reviewStats([r], columns, null, book).pendingFields} fields pending${r.boundary === 'pending' ? ' · confirm item' : ''}`
-                                    : !hasProjectedIdentity(r.values)
-                                      ? 'Needs source identity'
-                                      : 'Confirm item inclusion'
-                                  : stockCodeReady(r, columns, book) &&
-                                      !hasProjectedIdentity(r.values)
-                                    ? 'Item checks complete — stock code only'
-                                    : 'Item checks complete'}
-                            </Badge>
-                          </button>
-                        ))}
-                        {!visible.length && (
-                          <p className="empty">
-                            {reviewOnly && !stats.pendingItems
-                              ? processingComplete
-                                ? 'No item exceptions remain. Inspect the prepared spreadsheet, or turn off the filter to browse all items.'
-                                : 'Source checks are still pending. Any exceptions will appear here after processing.'
-                              : 'No items match this view.'}
-                          </p>
-                        )}
-                      </div>
-                      <div className="pagination">
-                        <small>
-                          {filtered.length
-                            ? `${listPage * 10 + 1}–${Math.min(listPage * 10 + 10, filtered.length)}`
-                            : '0'}{' '}
-                          of {filtered.length}{' '}
-                          {reviewOnly ? 'pending items in this view' : 'items in this view'}
-                        </small>
-                        <Button
-                          variant="ghost"
-                          disabled={!listPage}
-                          onClick={() => setPage(listPage - 1)}
-                        >
-                          Previous
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={(listPage + 1) * 10 >= filtered.length}
-                          onClick={() => setPage(listPage + 1)}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                      <details className="batch-controls">
-                        <summary>Review several items together</summary>
-                        <p>Preview the affected items before confirming any changes.</p>
-                        <Button variant="outline" onClick={() => beginGroup('boundaries')}>
-                          Confirm which rows are items
-                        </Button>
-                        <Button variant="outline" onClick={() => beginGroup('direct')}>
-                          Review copied values together
-                        </Button>
-                        <label>
-                          Leave a field blank across these items
-                          <select
-                            value=""
-                            onChange={(e) => {
-                              if (e.target.value) beginGroup('blank:' + e.target.value);
-                            }}
-                          >
-                            <option value="">Choose a field…</option>
-                            {Object.entries(labels).map(([k, v]) => (
-                              <option key={k} value={k}>
-                                {v}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </details>
-                      <button
-                        className="text-button mapping-link"
-                        onClick={() => {
-                          setShowMapping(true);
-                          setTab('mapping');
-                        }}
-                      >
-                        Items missing or columns incorrect?
-                      </button>
-                    </section>
-                    <section className="details">
-                      {item ? (
+                    <ReviewItemList
+                      stats={stats}
+                      reviewed={reviewed}
+                      query={query}
+                      reviewOnly={reviewOnly}
+                      visible={visible}
+                      selected={selected}
+                      columns={columns}
+                      book={book}
+                      processingComplete={processingComplete}
+                      filteredCount={filtered.length}
+                      listPage={listPage}
+                      onQueryChange={(value) => {
+                        setQuery(value);
+                        setPage(0);
+                      }}
+                      onReviewOnlyChange={(value) => {
+                        setReviewOnly(value);
+                        setPage(0);
+                      }}
+                      onSelect={setSelected}
+                      onPageChange={setPage}
+                      onBatch={beginGroup}
+                      onIdentifyColumns={() => {
+                        setShowMapping(true);
+                        setTab('mapping');
+                      }}
+                    />
+                    <ReviewItemDetails
+                      item={item || null}
+                      items={items}
+                      itemPosition={item ? items.indexOf(item) + 1 : 0}
+                      totalItems={stats.total}
+                      pendingFieldCount={selectedStats.pendingFields}
+                      automaticallyIncluded={
+                        !!(item && controller.current.boundaries.get(item.id)?.system)
+                      }
+                      mergeId={mergeId}
+                      nextLabel={
+                        item && remaining.some((r) => r.id !== item.id)
+                          ? 'Next item needing review'
+                          : remaining.length
+                            ? 'Continue reviewing this item'
+                            : nextLabel
+                      }
+                      onViewSource={() => {
+                        if (item)
+                          setSourceSelection({ sheet: item.sheet, addresses: item.anchors });
+                      }}
+                      onInclude={() => {
+                        if (item)
+                          change(item.id, (r) => ({ ...r, boundary: 'include' }), 'include item');
+                      }}
+                      onExclude={() => {
+                        if (item)
+                          change(item.id, (r) => ({ ...r, boundary: 'exclude' }), 'exclude item');
+                      }}
+                      onSplit={splitItem}
+                      onMergeSelection={setMergeId}
+                      onMerge={() =>
+                        setConfirmAction({
+                          title: 'Combine these items?',
+                          message: 'Their information will need review again.',
+                          run: mergeItem,
+                        })
+                      }
+                      onNext={() => {
+                        const next = remaining.find((r) => r.id !== item?.id);
+                        if (next) {
+                          setSelected(next.id);
+                          setQuery('');
+                          setReviewOnly(true);
+                          setPage(Math.floor(remaining.indexOf(next) / 10));
+                        } else goNext();
+                      }}
+                      onPreview={() => setOutputOpen(true)}
+                      onIdentifyColumns={() => {
+                        setShowMapping(true);
+                        setTab('mapping');
+                      }}
+                    >
+                      {item && item.boundary !== 'exclude' && (
                         <>
-                          <div className="panel-head">
-                            <div>
-                              <small>
-                                Item {items.indexOf(item) + 1} of {stats.total} total ·{' '}
-                                {selectedStats.pendingFields} fields pending
-                                {item.boundary === 'pending'
-                                  ? ' · inclusion needs confirmation'
-                                  : ''}
-                              </small>
-                              <h2>{item.values.E.value || 'Review this item'}</h2>
-                            </div>
-                            <Button
-                              variant="outline"
-                              onClick={() =>
-                                setSourceSelection({ sheet: item.sheet, addresses: item.anchors })
-                              }
-                            >
-                              View in proposal
-                            </Button>
-                          </div>
-                          <div className="boundary">
-                            <h3>
-                              {item.boundary === 'pending'
-                                ? 'Should this be an item in your output?'
-                                : 'Item inclusion'}
-                            </h3>
-                            <p>
-                              {item.boundary === 'include'
-                                ? controller.current.boundaries.get(item.id)?.system
-                                  ? 'Automatically included: ' + item.boundaryReason
-                                  : 'Included by your decision. Check any remaining exceptions below.'
-                                : item.boundary === 'exclude'
-                                  ? 'Excluded from your output. You can include it again if needed.'
-                                  : item.boundaryReason}
-                            </p>
-                            <div className="buttons">
-                              {item.boundary !== 'include' && (
-                                <Button
-                                  variant="outline"
-                                  onClick={() =>
-                                    change(
-                                      item.id,
-                                      (r) => ({ ...r, boundary: 'include' }),
-                                      'include item',
-                                    )
-                                  }
-                                >
-                                  Include item
-                                </Button>
-                              )}
-                              <Button
-                                variant="outline"
-                                onClick={() =>
-                                  change(
-                                    item.id,
-                                    (r) => ({ ...r, boundary: 'exclude' }),
-                                    'exclude item',
-                                  )
-                                }
-                              >
-                                Exclude item
-                              </Button>
-                            </div>
-                            <details>
-                              <summary>
-                                This is more than one item, or belongs with another row
-                              </summary>
-                              <p>{item.boundaryReason}</p>
-                              {item.ambiguous && (
-                                <Button variant="outline" onClick={splitItem}>
-                                  Separate into individual items
-                                </Button>
-                              )}
-                              <label>
-                                Combine with
-                                <select
-                                  value={mergeId}
-                                  onChange={(e) => setMergeId(e.target.value)}
-                                >
-                                  <option value="">Choose another item…</option>
-                                  {items
-                                    .filter(
-                                      (r) =>
-                                        r.id !== item.id &&
-                                        r.sheet === item.sheet &&
-                                        r.boundary !== 'exclude',
-                                    )
-                                    .map((r) => (
-                                      <option key={r.id} value={r.id}>
-                                        {r.anchors.join(', ')} ·{' '}
-                                        {(r.values.E.value || 'Item').slice(0, 60)}
-                                      </option>
-                                    ))}
-                                </select>
-                              </label>
-                              <Button
-                                variant="outline"
-                                disabled={!mergeId}
-                                onClick={() =>
-                                  setConfirmAction({
-                                    title: 'Combine these items?',
-                                    message: 'Their information will need review again.',
-                                    run: mergeItem,
-                                  })
-                                }
-                              >
-                                Combine items and review
-                              </Button>
-                            </details>
-                          </div>
-                          {item.boundary !== 'exclude' && (
-                            <>
-                              {stockCodeReady(item, columns, book) &&
-                                !hasProjectedIdentity(item.values) && (
-                                  <div className="boundary">
-                                    <h3>
-                                      {needsReview(item, columns, book)
-                                        ? 'Stock code verified'
-                                        : 'Ready for matching — stock code only'}
-                                    </h3>
-                                    <p>
-                                      The original stock code is verified and retained in Source
-                                      Product ID. Its catalog or supplier is still unknown.
-                                      Unsupported descriptions and manufacturer fields remain blank;
-                                      a catalog match is not guaranteed. Any remaining field and
-                                      proposal checks still apply.
-                                    </p>
-                                  </div>
-                                )}
-                              {!hasMatchingIdentity(item, columns, book) && (
-                                <div className="boundary" role="alert">
-                                  <h3>This item needs a usable identity</h3>
-                                  <p>
-                                    Approve the Source Product ID column to retain a verified stock
-                                    code. If codes conflict or their relationships are unclear,
-                                    resolve the item boundary or code evidence first. A supported
-                                    description or labeled identifier can also provide identity.
-                                    Leave unsupported values blank.
-                                  </p>
-                                  {fieldUI('E', item.values.E, false)}
-                                </div>
-                              )}
-                              {book &&
-                                ['K', 'L', 'M'].some(
-                                  (k) => item.values[k].status === 'pending',
-                                ) && (
-                                  <QuantityReview
-                                    key={
-                                      item.id +
-                                      JSON.stringify([item.values.K, item.values.L, item.values.M])
-                                    }
-                                    record={item}
-                                    book={book}
-                                    onView={(addresses) =>
-                                      setSourceSelection({
-                                        sheet: item.sheet,
-                                        addresses,
-                                        label: 'Quantity and packaging',
-                                      })
-                                    }
-                                    onFormula={() => {
-                                      try {
-                                        change(
-                                          item.id,
-                                          (r) => {
-                                            r.values.K.status = 'accepted';
-                                            r.values.K.reason =
-                                              'Reviewer confirmed independently checked arithmetic, annual period and purchasing unit ' +
-                                              r.values.L.value +
-                                              '.';
-                                            return r;
-                                          },
-                                          'Confirm annual formula, period and purchasing unit',
-                                          true,
-                                        );
-                                      } catch (e) {
-                                        setError((e as Error).message);
-                                      }
-                                    }}
-                                    onPackaging={(keepAnnual) => {
-                                      try {
-                                        change(
-                                          item.id,
-                                          (r) => confirmPackaging(r, book, keepAnnual),
-                                          'Confirm packaging relationship' +
-                                            (keepAnnual
-                                              ? ' and annual purchasing unit'
-                                              : '; annual quantity deliberately blank'),
-                                          keepAnnual && !!formulaReview(item, book),
-                                        );
-                                      } catch (e) {
-                                        setError((e as Error).message);
-                                      }
-                                    }}
-                                  />
-                                )}
-                              <div className="section-label">
-                                <h3>{selectedStats.pendingFields} fields need review</h3>
+                          {stockCodeReady(item, columns, book) &&
+                            !hasProjectedIdentity(item.values) && (
+                              <div className="boundary">
+                                <h3>
+                                  {needsReview(item, columns, book)
+                                    ? 'Stock code verified'
+                                    : 'Ready for matching — stock code only'}
+                                </h3>
                                 <p>
-                                  Compare each exception with the source. Unsupported fields stay
-                                  blank automatically. Verified source copies are already handled;
-                                  review only uncertain interpretations and conflicts.
+                                  The original stock code is verified and retained in Source Product
+                                  ID. Its catalog or supplier is still unknown. Unsupported
+                                  descriptions and manufacturer fields remain blank; a catalog match
+                                  is not guaranteed. Any remaining field and proposal checks still
+                                  apply.
                                 </p>
                               </div>
-                              {pendingFields
-                                .filter((x) => x.f.status === 'pending')
-                                .map((x) => fieldUI(x.k, x.f, x.extra))}
-                              {pendingFields.some((x) => x.f.status !== 'pending') && (
-                                <details className="completed-fields">
-                                  <summary>
-                                    Handled fields (
-                                    {pendingFields.filter((x) => x.f.status !== 'pending').length})
-                                  </summary>
-                                  {pendingFields
-                                    .filter((x) => x.f.status !== 'pending')
-                                    .map((x) => fieldUI(x.k, x.f, x.extra))}
-                                </details>
-                              )}
-                            </>
+                            )}
+                          {!hasMatchingIdentity(item, columns, book) && (
+                            <div className="boundary" role="alert">
+                              <h3>This item needs a usable identity</h3>
+                              <p>
+                                Approve the Source Product ID column to retain a verified stock
+                                code. If codes conflict or their relationships are unclear, resolve
+                                the item boundary or code evidence first. A supported description or
+                                labeled identifier can also provide identity. Leave unsupported
+                                values blank.
+                              </p>
+                              {fieldUI('E', item.values.E, false)}
+                            </div>
                           )}
-                          <div className="next-item">
-                            <Button
-                              onClick={() => {
-                                const next = remaining.find((r) => r.id !== item.id);
-                                if (next) {
-                                  setSelected(next.id);
-                                  setQuery('');
-                                  setReviewOnly(true);
-                                  setPage(Math.floor(remaining.indexOf(next) / 10));
-                                } else goNext();
-                              }}
-                            >
-                              {remaining.some((r) => r.id !== item.id)
-                                ? 'Next item needing review'
-                                : remaining.length
-                                  ? 'Continue reviewing this item'
-                                  : nextLabel}
-                            </Button>
+                          {book &&
+                            ['K', 'L', 'M'].some((k) => item.values[k].status === 'pending') && (
+                              <QuantityReview
+                                key={
+                                  item.id +
+                                  JSON.stringify([item.values.K, item.values.L, item.values.M])
+                                }
+                                record={item}
+                                book={book}
+                                onView={(addresses) =>
+                                  setSourceSelection({
+                                    sheet: item.sheet,
+                                    addresses,
+                                    label: 'Quantity and packaging',
+                                  })
+                                }
+                                onFormula={() => {
+                                  try {
+                                    change(
+                                      item.id,
+                                      (r) => {
+                                        r.values.K.status = 'accepted';
+                                        r.values.K.reason =
+                                          'Reviewer confirmed independently checked arithmetic, annual period and purchasing unit ' +
+                                          r.values.L.value +
+                                          '.';
+                                        return r;
+                                      },
+                                      'Confirm annual formula, period and purchasing unit',
+                                      true,
+                                    );
+                                  } catch (e) {
+                                    setError((e as Error).message);
+                                  }
+                                }}
+                                onPackaging={(keepAnnual) => {
+                                  try {
+                                    change(
+                                      item.id,
+                                      (r) => confirmPackaging(r, book, keepAnnual),
+                                      'Confirm packaging relationship' +
+                                        (keepAnnual
+                                          ? ' and annual purchasing unit'
+                                          : '; annual quantity deliberately blank'),
+                                      keepAnnual && !!formulaReview(item, book),
+                                    );
+                                  } catch (e) {
+                                    setError((e as Error).message);
+                                  }
+                                }}
+                              />
+                            )}
+                          <div className="section-label">
+                            <h3>{selectedStats.pendingFields} fields need review</h3>
+                            <p>
+                              Compare each exception with the source. Unsupported fields stay blank
+                              automatically. Verified source copies are already handled; review only
+                              uncertain interpretations and conflicts.
+                            </p>
                           </div>
-                        </>
-                      ) : (
-                        <div className="empty">
-                          <h2>
-                            {items.length
-                              ? 'No item exceptions in this view'
-                              : 'No items identified'}
-                          </h2>
-                          <p>
-                            {items.length
-                              ? 'Supported fields are handled automatically. You can inspect every value in the spreadsheet preview.'
-                              : 'Help identify the proposal columns to continue.'}
-                          </p>
-                          {items.length ? (
-                            <Button variant="outline" onClick={() => setOutputOpen(true)}>
-                              View spreadsheet and sources
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={() => {
-                                setShowMapping(true);
-                                setTab('mapping');
-                              }}
-                            >
-                              Identify columns
-                            </Button>
+                          {pendingFields
+                            .filter((x) => x.f.status === 'pending')
+                            .map((x) => fieldUI(x.k, x.f, x.extra))}
+                          {pendingFields.some((x) => x.f.status !== 'pending') && (
+                            <details className="completed-fields">
+                              <summary>
+                                Handled fields (
+                                {pendingFields.filter((x) => x.f.status !== 'pending').length})
+                              </summary>
+                              {pendingFields
+                                .filter((x) => x.f.status !== 'pending')
+                                .map((x) => fieldUI(x.k, x.f, x.extra))}
+                            </details>
                           )}
-                        </div>
+                        </>
                       )}
-                    </section>
+                    </ReviewItemDetails>
                   </div>
                 </fieldset>
               </TabsContent>
@@ -2558,164 +2258,53 @@ export default function Home() {
               </TabsContent>
               {PIPELINE_DEBUG_ENABLED && <TabsContent value="debug">{debugPanel}</TabsContent>}
               <TabsContent value="export">
-                <section className="panel export">
-                  <h2>
-                    {downloaded
-                      ? 'Your spreadsheet has been prepared.'
-                      : blockers.length
-                        ? 'Finish the remaining checks.'
-                        : 'Ready to download.'}
-                  </h2>
-                  <p>
-                    {included} included items · {stats.pendingItems} items pending review · 13
-                    original template columns
-                    {Object.values(columns).some((v) => v === 'approved')
-                      ? ` · ${Object.values(columns).filter((v) => v === 'approved').length} added columns`
-                      : ''}
-                  </p>
-                  {blockers.length > 0 && (
-                    <div className="download-checklist">
-                      {remaining.length > 0 && (
-                        <button
-                          onClick={() => {
-                            setTab('items');
-                            setReviewOnly(true);
-                            setSelected(remaining[0].id);
-                            setPage(0);
-                            setQuery('');
-                          }}
-                        >
-                          <span>
-                            Review {remaining.length} remaining{' '}
-                            {remaining.length === 1 ? 'item' : 'items'}
-                          </span>
-                          <strong>Review items</strong>
-                        </button>
-                      )}
-                      {!items.length && (
-                        <button
-                          onClick={() => {
-                            setShowMapping(true);
-                            setTab('mapping');
-                          }}
-                        >
-                          <span>No items have been identified</span>
-                          <strong>Identify columns</strong>
-                        </button>
-                      )}
-                      {lostIdentifiers.length > 0 && (
-                        <button onClick={() => setTab('columns')}>
-                          <span>
-                            {lostIdentifiers.length} items would lose their source product codes
-                          </span>
-                          <strong>Keep product codes</strong>
-                        </button>
-                      )}
-                      {pendingColumns > 0 && (
-                        <button onClick={() => setTab('columns')}>
-                          <span>
-                            Decide whether to add {pendingColumns} extra{' '}
-                            {pendingColumns === 1 ? 'column' : 'columns'}
-                          </span>
-                          <strong>Review information</strong>
-                        </button>
-                      )}
-                      {(!coverage || coverageErrors.length > 0) && (
-                        <button onClick={() => setTab('source')}>
-                          <span>
-                            {unconfirmedSheets.length
-                              ? `Check ${unconfirmedSheets.length} remaining ${unconfirmedSheets.length === 1 ? 'sheet' : 'sheets'}`
-                              : 'Confirm all sheets have been checked'}
-                            {coverageSummary?.unresolved
-                              ? ` · ${coverageSummary.unresolved} cells to check`
-                              : ''}
-                          </span>
-                          <strong>Check proposal</strong>
-                        </button>
-                      )}
-                      <details open={!remaining.length && !pendingColumns && coverage}>
-                        <summary>All remaining checks ({blockers.length})</summary>
-                        {blockers.map((b) => (
-                          <p key={b}>{b}</p>
-                        ))}
-                        {finalBlockers.length > 0 && (
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setReviewOnly(false);
-                              setTab('items');
-                            }}
-                          >
-                            Return to items to resolve these checks
-                          </Button>
-                        )}
-                      </details>
-                    </div>
-                  )}
-                  {included > 0 && (
-                    <Button
-                      variant="outline"
-                      disabled={busy || aiBusy}
-                      onClick={() => setOutputOpen(true)}
-                    >
-                      View spreadsheet and sources
-                    </Button>
-                  )}
-                  {included > 0 && blockers.length > 0 && (
-                    <p>
-                      The preview contains current values. Finish the remaining checks before
-                      downloading.
-                    </p>
-                  )}
-                  <Button
-                    disabled={busy || aiBusy || !!blockers.length}
-                    onClick={() => void download()}
-                  >
-                    <Download size={18} />
-                    {busy ? 'Checking and preparing Excel…' : 'Download Excel'}
-                  </Button>
-                  <p>
-                    Prepared for inventory matching. Items have not been matched to inventory yet.
-                  </p>
-                  {saveFile && (
-                    <p>
-                      <a
-                        className="text-button"
-                        href={saveFile.url}
-                        download={saveFile.name}
-                        onClick={() => {
-                          session.current.downloadRequested();
-                          log('download requested', { rows: included });
-                        }}
-                      >
-                        Save Excel file
-                      </a>
-                    </p>
-                  )}
-                  {downloaded && (
-                    <>
-                      <p>
-                        Your spreadsheet passed the export checks. Click Save Excel file to save it.
-                        If your browser does not start the download, click the link again. The file
-                        remains available during this temporary session.
-                      </p>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          session.current.continueReview();
-                          setDownloaded(false);
-                          setTab('items');
-                        }}
-                      >
-                        Continue reviewing
-                      </Button>
-                    </>
-                  )}
-                  <small>
-                    Prototype testing is still in progress. Check the downloaded workbook before
-                    using it for a live bid.
-                  </small>
-                </section>
+                <DownloadView
+                  downloaded={downloaded}
+                  blockers={blockers}
+                  included={included}
+                  pendingItems={stats.pendingItems}
+                  addedColumns={Object.values(columns).filter((v) => v === 'approved').length}
+                  remainingCount={remaining.length}
+                  itemCount={items.length}
+                  lostIdentifierCount={lostIdentifiers.length}
+                  pendingColumns={pendingColumns}
+                  coverage={coverage}
+                  coverageErrorCount={coverageErrors.length}
+                  unconfirmedSheetCount={unconfirmedSheets.length}
+                  unresolvedCells={coverageSummary?.unresolved || 0}
+                  finalBlockerCount={finalBlockers.length}
+                  busy={busy}
+                  aiBusy={aiBusy}
+                  saveFile={saveFile}
+                  onReviewExceptions={() => {
+                    setTab('items');
+                    setReviewOnly(true);
+                    setSelected(remaining[0].id);
+                    setPage(0);
+                    setQuery('');
+                  }}
+                  onIdentifyColumns={() => {
+                    setShowMapping(true);
+                    setTab('mapping');
+                  }}
+                  onReviewColumns={() => setTab('columns')}
+                  onReviewSource={() => setTab('source')}
+                  onReviewAllItems={() => {
+                    setReviewOnly(false);
+                    setTab('items');
+                  }}
+                  onPreview={() => setOutputOpen(true)}
+                  onDownload={() => void download()}
+                  onSave={() => {
+                    session.current.downloadRequested();
+                    log('download requested', { rows: included });
+                  }}
+                  onContinueReview={() => {
+                    session.current.continueReview();
+                    setDownloaded(false);
+                    setTab('items');
+                  }}
+                />
               </TabsContent>
             </Tabs>
             <Dialog

@@ -9,14 +9,15 @@ do not establish accuracy on a new proposal layout or provider response.
 | Location                                               | Responsibility                                                                                            |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | `app/page.tsx`                                         | Session lifetime, React state, user actions, and committing completed pipeline results                    |
+| `components/workflow/`                                 | Typed upload, progress, item list/details and download views; callbacks delegate to the page              |
 | `components/review/`                                   | Field review and source/output previews; typed props live in `lib/review-types.ts`                        |
 | `lib/workbook.mjs`, `lib/parse.worker.ts`              | Bounded OOXML parsing, known-layout extraction, and workbook writing                                      |
 | `lib/ai/process-proposal.mjs`                          | Stage source groups, validate responses, split oversized/timed-out groups, collect results                |
 | `lib/ai/stages.mjs`                                    | Request deadlines, temporary stage cache, busy-service waits, and retry                                   |
-| `lib/ai/types.ts`                                     | Schema-derived AI payload types, temporary cache state and processing boundary contracts                 |
-| `lib/ai/normalize-proposal.mjs`                        | Deterministic preparation, retry scope planning, AI runner and guarded synchronous policy application    |
-| `lib/session/coordinator.mjs`                         | Temporary source ownership, operation locks, resource cleanup, retry cache, download URLs and clocks     |
-| `lib/session/parse-workbook.mjs`                      | Parser worker transport, current-owner progress, timeout and completion cleanup                         |
+| `lib/ai/types.ts`                                      | Schema-derived AI payload types, temporary cache state and processing boundary contracts                  |
+| `lib/ai/normalize-proposal.mjs`                        | Deterministic preparation, retry scope planning, AI runner and guarded synchronous policy application     |
+| `lib/session/coordinator.mjs`                          | Temporary source ownership, operation locks, resource cleanup, retry cache, download URLs and clocks      |
+| `lib/session/parse-workbook.mjs`                       | Parser worker transport, current-owner progress, timeout and completion cleanup                           |
 | `lib/ai/client.mjs`, `contracts.mjs`, `evaluation.mjs` | Evidence scopes, response contracts, and source-grounded candidate application                            |
 | `app/api/extract/route.ts`, `lib/ai/service.mjs`       | Authenticated requests, leases, rate limits, and provider adapters                                        |
 | `lib/canonical/`                                       | Independent approval authority, source rules, dependent-field invalidation, coverage, and final readiness |
@@ -92,6 +93,28 @@ the absolute start time. Tests cover source replacement, queued cancellation and
 retry, old-owner cleanup, stale export returns, worker success/failure/timeout,
 URL cleanup and exact expiry boundaries. Browser acceptance is still separate.
 
+## Workflow views
+
+`components/workflow/` separates the upload, review overview, AI status, item list,
+item details and download panel from `app/page.tsx`. These views receive typed
+props and explicit action callbacks. They do not own source bytes, sessions,
+controller approvals, AI requests or export validation. The item list uses the
+shared read-only review helpers; it calculates each visible item's eligibility
+and pending-field count once per render.
+
+The page retains React state, navigation and event sequencing. Field decisions,
+identity warnings and quantity/packaging controls remain in the page and are
+passed as children of the item details view. The workspace fieldset still disables
+all review controls during processing. Download disabled conditions and current
+blocker messages remain supplied by the existing readiness computation; the view
+cannot bypass the final canonical export gate. No wrapper elements, CSS, wording,
+provider calls or persistence changes are introduced by this extraction.
+
+When extending these views, keep display counters separate from export permission
+and use explicit callbacks rather than passing the session or controller into a
+presentation component. Mapping, proposal coverage and extra-column decisions
+still live in the page and can be extracted along their own feature boundaries.
+
 ## Verification commands
 
 Use [Repeatable verification](verification.md) for setup, one-command checks,
@@ -117,7 +140,8 @@ authoritative reference schema as part of application cleanup.
 - AI preparation, scope planning, processing and policy application now live in
   the normalization runner. Session ownership and resource transitions now live
   in the coordinator. `app/page.tsx` still coordinates React display state and
-  the review/mapping/coverage views. Further extraction should
+  field controls and the mapping/coverage/extra-column views. The workflow panels
+  now have typed component boundaries. Further extraction should
   follow feature boundaries and include interaction tests for session replacement,
   cancellation, stale decisions, and export invalidation. Moving all state into a
   generic hook would mostly relocate the coupling.
