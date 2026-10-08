@@ -14,7 +14,7 @@ const cases = [
   ['Berry', '5c3b8658-ae6e-4236-aa3e-731f507b82fc/PPE List.xlsx', 76, 10],
 ];
 for (const [name, path, count, expectedRequests] of cases) {
-  test(`${name}: portable API preserves source occurrences or explicitly rejects unresolved coverage`, async () => {
+  test(`${name}: portable API preserves source occurrences without a confidence approval gate`, async () => {
     const input = readFileSync('../attachments/' + path);
     const original = prepareDescriptions(extract(readWorkbook(input)).records, readWorkbook(input));
     let requests = 0;
@@ -34,16 +34,18 @@ for (const [name, path, count, expectedRequests] of cases) {
         { type: 'output_text', text: JSON.stringify(proposal) },
       ] }] });
     } });
+    const bytes = await normalize(input, { filename: path.split('/').at(-1) });
+    if (name !== 'Berry') assert.equal(requests, expectedRequests);
+    const out = readWorkbook(bytes), sheet = out.sheets.find(s => s.name === 'AI BID IDENTIFICATION TEMPLATE');
+    const outputCount = Object.keys(sheet.cells).filter(a => /^A\d+$/.test(a)).length - 1;
     if (name === 'Berry') {
-      // The old parser collapsed several stock codes into two ambiguous groups.
-      // An AI response that calls those missing products context must not export 74 rows.
-      await assert.rejects(normalize(input, { filename: path.split('/').at(-1) }), /Missing product occurrence at Sheet1!/);
+      assert.ok(outputCount >= count - 2, 'uncertain groups are retained as source rows');
+      const text = Object.values(sheet.cells).map(c => c.raw).join(' | ');
+      for (const r of original) for (const a of r.anchors)
+        assert.ok(text.includes(readWorkbook(input).sheets.find(s => s.name === r.sheet).cells[a].raw), 'preserve original source ' + a);
       return;
     }
-    const bytes = await normalize(input, { filename: path.split('/').at(-1) });
-    assert.equal(requests, expectedRequests);
-    const out = readWorkbook(bytes), sheet = out.sheets.find(s => s.name === 'AI BID IDENTIFICATION TEMPLATE');
-    assert.equal(Object.keys(sheet.cells).filter(a => /^A\d+$/.test(a)).length - 1, count);
+    assert.equal(outputCount, count);
     for (const [index, record] of original.entries()) {
       assert.equal(sheet.cells['A' + (index + 2)].raw, String(index + 1));
       assert.equal(sheet.cells['E' + (index + 2)]?.raw || '', record.values.E.value);

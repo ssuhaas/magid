@@ -82,13 +82,14 @@ means the workbook was written; failures use a nonzero exit code.
 - Inventory every populated source cell across all sheets. Recover unaccounted
   regions even on recognized or partially mapped sheets. Discovery must account
   for each target cell as an item anchor or explicit source-backed non-item context;
-  missing, duplicate or out-of-scope coverage rejects the call. Known item-bearing
-  columns and explicit product markers cannot be silently classified as context.
+  unaccounted or misclassified known product cells are retained as original source
+  rows automatically. Duplicate/out-of-scope anchors and fabricated evidence remain
+  invalid responses; they are not confidence decisions.
 - Known table parsers follow populated source rows rather than sample-file row
-  limits. Unrecognized contiguous regions remain intact so wrapped items are not
-  bisected. Blocks beyond 101 rows or the provider payload limit fail explicitly
-  rather than being truncated. Hidden populated source also fails explicitly;
-  unhide it or remove irrelevant hidden content before processing.
+  limits. Large unfamiliar regions use bounded requests without dropping target
+  cells. Wrapped descriptions can cross request boundaries, so later evaluation
+  may need to reconcile those relationships. Hidden source is inventoried too;
+  uncertain hidden values are preserved as original text, not approved facts.
 - An optional request.mapping with sheet, start, end and columns (template letter
   to source column) supplies initial item mappings. It does not waive coverage
   of unmapped rows, columns or other sheets.
@@ -104,11 +105,13 @@ means the workbook was written; failures use a nonzero exit code.
   failed multi-item requests can split into single-item requests. No partial
   workbook is returned after a failed/canceled run.
 - Send ambiguous parser groups and unlabeled adjacent-code relationships back
-  through recovery discovery instead of
-  exporting several source codes as a single placeholder item. Unresolved
-  boundaries, discovery warnings or recovered products with no validated
-  description/identifier reject export. Errors identify source locations; the
-  caller must handle failed calls and must not treat them as completed bids.
+  through recovery discovery. Accept ambiguous results and warnings without a
+  reviewer. If product relationships or normalized descriptions remain unresolved,
+  retain original text in description 2 and add Original Source Cells for provenance.
+  These are source rows, not certified individual product boundaries. If discovery
+  identifies no products, retain its target source rows instead of blocking export.
+  Unsupported size, manufacturer and quantity fields remain blank. Formula text
+  may be preserved literally with a not-evaluated label; formulas never run.
 - Verify the template and exported values by readback. AI BID SETUP and other
   template worksheet contents remain unchanged.
 

@@ -149,10 +149,10 @@ test('known tables include product rows beyond the original sample endpoints', a
   }
 });
 
-test('discovery omissions, duplicate coverage and empty recovered products cannot export', async () => {
+test('uncertain discovery and missed product cells retain original source instead of blocking export', async () => {
   for (const transform of [
     p => ({ ...p, items: [] }),
-    p => ({ ...p, nonItems: [{ sheet: 'Bid', cell: 'A1', disposition: 'context', quote: 'Product: Glove', reason: 'Not an item.' }] }),
+    p => ({ ...p, items: [], nonItems: [{ sheet: 'Bid', cell: 'A1', disposition: 'context', quote: 'Product: Glove', reason: 'Uncertain item.' }] }),
     p => ({ ...p, items: p.items.map(i => ({ ...i, fields: [] })) }),
     p => ({ ...p, items: p.items.map(i => ({ ...i, ambiguous: true })) }),
     p => ({ ...p, warnings: ['Possible missing products.'] }),
@@ -163,7 +163,8 @@ test('discovery omissions, duplicate coverage and empty recovered products canno
       const text = body.output[0].content[0]; text.text = JSON.stringify(transform(JSON.parse(text.text)));
       return Response.json(body);
     };
-    await assert.rejects(createBidNormalizer({ key: 'synthetic-key', fetchImpl })(source({ A1: 'Product: Glove' })), /Source coverage could not be resolved at Bid!A1/);
+    const out = identification(await createBidNormalizer({ key: 'synthetic-key', fetchImpl })(source({ A1: 'Product: Glove' })));
+    assert.equal(out.cells.E2?.raw || out.cells.F2?.raw, 'Product: Glove');
   }
 });
 
@@ -193,14 +194,18 @@ test('wrapped discoveries stay together and separate repeated source occurrences
   assert.equal(identification(await createBidNormalizer({ key: 'synthetic-key', fetchImpl })(source({ A1: 'Product: Glove', A2: 'XL' }))).cells.E2.raw, 'Product: Glove XL');
 });
 
-test('unsafe unknown blocks and hidden product rows fail explicitly instead of disappearing', async () => {
+test('long unknown blocks and hidden product rows continue without losing source text', async () => {
   const values = Object.fromEntries(Array.from({ length: 102 }, (_, i) => ['A' + (i + 1), 'Product: Glove']));
-  await assert.rejects(createBidNormalizer()(source(values)), /Unresolved long source block/);
+  const provider = controlledProvider(productField);
+  const normalize = createBidNormalizer({ key: 'synthetic-key', fetchImpl: provider.fetchImpl });
+  const out = identification(await normalize(source(values)));
+  assert.equal(Object.keys(out.cells).filter(a => /^A\d+$/.test(a)).length - 1, 102);
   const { unzipSync, strFromU8 } = await import('fflate');
   const zip = unzipSync(source({ A1: 'Product: Glove' }));
   const path = 'xl/worksheets/sheet1.xml';
   zip[path] = strToU8(strFromU8(zip[path]).replace('<row r="1">', '<row r="1" hidden="1">'));
-  await assert.rejects(createBidNormalizer()(zipSync(zip)), /Unresolved hidden source at Bid!A1/);
+  const hidden = identification(await normalize(zipSync(zip)));
+  assert.equal(hidden.cells.F2.raw, 'Product: Glove');
 });
 
 test('ambiguous stock groups are recovered into individual products instead of placeholder rows', async () => {
@@ -234,7 +239,7 @@ test('a second product table beyond Tesla quote columns is not silently excluded
   assert.equal(out.cells.E3.raw, 'Product: Helmet');
 });
 
-test('enrichment boundary concerns cannot silently export a single unresolved item', async () => {
+test('enrichment boundary concerns do not require a reviewer or block export', async () => {
   const provider = controlledProvider(() => []);
   const fetchImpl = async (...args) => {
     const response = await provider.fetchImpl(...args), body = await response.json();
@@ -242,5 +247,24 @@ test('enrichment boundary concerns cannot silently export a single unresolved it
     proposal.items[0].ambiguous = true; block.text = JSON.stringify(proposal);
     return Response.json(body);
   };
-  await assert.rejects(createBidNormalizer({ key: 'synthetic-key', fetchImpl })(tesla()), /Unresolved product boundaries/);
+  const out = identification(await createBidNormalizer({ key: 'synthetic-key', fetchImpl })(tesla()));
+  assert.equal(out.cells.E2.raw, 'Gloves size XL');
+  assert.equal(out.cells.F2.raw, 'Gloves size XL');
+});
+
+test('an all-context discovery result retains source rows instead of requiring approval', async () => {
+  const provider = controlledProvider(() => []);
+  const out = identification(await createBidNormalizer({ key: 'synthetic-key', fetchImpl: provider.fetchImpl })(source({ A1: 'Glove XL, code 00123' })));
+  assert.equal(out.cells.F2.raw, 'Glove XL, code 00123');
+});
+
+test('contradictory duplicate anchors remain invalid rather than confidence decisions', async () => {
+  const provider = controlledProvider(productField);
+  const fetchImpl = async (...args) => {
+    const response = await provider.fetchImpl(...args), body = await response.json();
+    const block = body.output[0].content[0], proposal = JSON.parse(block.text);
+    proposal.items.push(proposal.items[0]); block.text = JSON.stringify(proposal);
+    return Response.json(body);
+  };
+  await assert.rejects(createBidNormalizer({ key: 'synthetic-key', fetchImpl })(source({ A1: 'Product: Glove' })), /contract validation/);
 });

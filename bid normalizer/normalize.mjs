@@ -6,10 +6,11 @@ import { prepareNormalization } from './src/ai/normalize-proposal.mjs';
 import { deterministicCompleteness } from './src/canonical/completeness.mjs';
 import { planEnrichmentScopes } from './src/ai/scope-planner.mjs';
 import { buildScope, applyProposal } from './src/ai/client.mjs';
+import { rawItems } from './src/ai/item-discovery.mjs';
 import { validateProposal } from './src/ai/contracts.mjs';
 import { callExtractionStage, callDiscoveryStage } from './src/ai/service.mjs';
 import { projectWorkbookRecords } from './projection.mjs';
-import { planRecovery, assertRecoveredItems, assertProductAnchors } from './item-coverage.mjs';
+import { planRecovery, preserveRawItems, preserveProductAnchors } from './item-coverage.mjs';
 
 /** No browser, HTTP route, durable state, model evaluation or human decision dependency. */
 export async function normalize(proposalBytes, templateBytes, config, {
@@ -70,9 +71,7 @@ export async function normalize(proposalBytes, templateBytes, config, {
           if (envelope.digest !== digest || envelope.scopeId !== scope.scopeId)
             throw Error('Extraction belongs to a different proposal.');
           validateProposal(scope, envelope.proposal);
-          if (envelope.proposal.items.some(item => item.ambiguous))
-            throw Error('Unresolved product boundaries at ' + scope.cells.filter(c => c.eligibleAnchor).slice(0, 8).map(c => c.sheet + '!' + c.cell).join(', '));
-          if (scope.mode === 'discover') assertProductAnchors(book, scope, envelope.proposal);
+          if (scope.mode === 'discover') preserveProductAnchors(book, scope, envelope.proposal, identified);
           results.set(scope.scopeId, envelope);
           report({ stage: 'extract', completed: ++completed, groups: scopes.length });
         }
@@ -88,9 +87,16 @@ export async function normalize(proposalBytes, templateBytes, config, {
     for (const scope of scopes) {
       const applied = applyProposal(scope.mode === 'discover' ? [] : records,
         book, scope, results.get(scope.scopeId));
+      for (const record of applied.records)
+        if (results.get(scope.scopeId).proposal.items.some(item => item.recordId === record.id && item.ambiguous))
+          record.ambiguous = true;
       records = scope.mode === 'discover' ? [...records, ...applied.records] : applied.records;
     }
-    if (!records.length) throw Error('No product items were identified in the proposal.');
+    if (!records.length) for (const scope of scopes.filter(s => s.mode === 'discover')) {
+      const preserved = { ...results.get(scope.scopeId), proposal: {
+        items: rawItems(scope.cells.filter(c => c.eligibleAnchor)), warnings: [] } };
+      records.push(...applyProposal([], book, scope, preserved).records);
+    }
     if (records.length > 2000) throw Error('Maximum 2,000 normalized items.');
     const occupied = new Set();
     for (const record of records) for (const anchor of record.anchors) {
@@ -99,7 +105,7 @@ export async function normalize(proposalBytes, templateBytes, config, {
       occupied.add(key);
     }
     const projected = projectWorkbookRecords(records, book);
-    assertRecoveredItems(records, projected.records);
+    preserveRawItems(records, projected, book);
     check();
     const output = exportWorkbook(templateBytes, projected.records, projected.columns);
     check();
