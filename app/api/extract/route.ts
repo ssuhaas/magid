@@ -9,6 +9,7 @@ import {
   readLimitedJSON,
   DEFAULT_GEMINI_MODEL,
 } from '@/lib/ai/service.mjs';
+import { scopeMaxItems } from '@/lib/ai/scope-planner.mjs';
 import { createRequestSlots, PROPOSAL_CONCURRENCY } from '@/lib/ai/request-slots.mjs';
 export const dynamic = 'force-dynamic';
 const slots = createRequestSlots();
@@ -18,6 +19,7 @@ function config() {
   const provider = values.AI_PROVIDER || 'openai';
   return {
     provider,
+    maxItems: scopeMaxItems(Number(values.AI_SCOPE_MAX_ITEMS)),
     key: provider === 'gemini' ? values.GEMINI_API_KEY : values.OPENAI_API_KEY,
     model:
       provider === 'gemini'
@@ -42,6 +44,7 @@ export async function GET() {
     provider: c.provider,
     model: c.model,
     concurrency: PROPOSAL_CONCURRENCY,
+    maxItems: c.maxItems,
     storage: 'temporary request memory',
     providerNotice:
       c.provider === 'gemini'
@@ -60,12 +63,17 @@ export async function POST(request: Request) {
   if (!c.key) return json({ error: 'Server-side model credential is not configured.' }, 503);
   const admission = slots.acquire(user.userId);
   if (!admission.lease)
-    return json({
-      error: admission.code === 'REQUEST_RATE_LIMIT'
-        ? 'Waiting for the temporary request limit to reset.'
-        : 'Waiting for a free AI processing slot. Processing will resume automatically.',
-      code: admission.code,
-    }, 429, admission.retryAfter);
+    return json(
+      {
+        error:
+          admission.code === 'REQUEST_RATE_LIMIT'
+            ? 'Waiting for the temporary request limit to reset.'
+            : 'Waiting for a free AI processing slot. Processing will resume automatically.',
+        code: admission.code,
+      },
+      429,
+      admission.retryAfter,
+    );
   const lease = admission.lease;
   const deadline = setTimeout(() => lease.abort.abort(), 27000);
   const cancel = () => lease.abort.abort();

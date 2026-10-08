@@ -71,12 +71,57 @@ The temporary Pipeline tab records the planned group/field counts and actual
 nonnegative provider token usage when returned. It never records credentials or
 provider reasoning text. Missing usage is not treated as zero.
 
+## Bounded grouping experiment
+
+The default remains the established three-item plan. `AI_SCOPE_MAX_ITEMS` is an
+optional server binding accepting integer values 3–6; invalid or absent values
+use 3. To compare the larger plan, set it to 6 and start a fresh temporary session.
+This is an experiment awaiting live-provider acceptance, not an enabled speedup
+on the deployed site. No reviewer setting or approval policy changes.
+
+With the opt-in bound, adjacent records from the same sheet/section can share a
+scope containing at most 36 unresolved field targets and 60,000 serialized source
+bytes. Fully unresolved items therefore stay at three per group; low-work items
+can share up to six. A single larger item retains all evidence and the existing
+hard 350,000-byte/900-cell limit. Context is never trimmed to fit the budget.
+Independent evaluation still checks every occurrence. Existing failure/cancellation,
+single-item split, source ordering, cache binding and final export gates remain.
+Changing the grouping bound invalidates the retry plan.
+
+The offline command now compares both plans, keeping the original target totals:
+
+| Proposal     | Default groups / calls | Bounded groups / calls | Planned call reduction |
+| ------------ | ---------------------: | ---------------------: | ---------------------: |
+| Daikin       |              113 / 226 |               87 / 174 |                  23.0% |
+| Hyundai      |                12 / 24 |                10 / 20 |                  16.7% |
+| Tesla        |              159 / 318 |               80 / 160 |                  49.7% |
+| Grainger     |                11 / 22 |                11 / 22 |                     0% |
+| Berry Global |                26 / 52 |                26 / 52 |                     0% |
+
+These are planned calls before retries and cache reuse, not elapsed-time savings.
+The script also reports serialized source payload bytes and local planning time;
+these are not provider tokens or total extraction/evaluation wire bytes. Growing
+candidate groups costs more local planning CPU: one observed Tesla comparison was
+469 ms versus 1,339 ms. Model latency, larger output, rate limits and failed-group
+splits can offset request savings. Do not promote the opt-in mode until live runs
+show useful time savings without more accuracy failures or excessive retries.
+
+The temporary Pipeline tab now includes stage-request timings and a final run
+summary (elapsed processing time, observed extraction/evaluation requests, failed
+requests, summed request time and final group count). Request time includes browser
+request/response handling; overlapping request times cannot be added to infer wall
+time. The run summary excludes upload, deterministic preparation and scope planning.
+Cached stages do not emit new request timings. Summaries contain no source values,
+credentials or provider reasoning. Diagnostics remain temporary and optional.
+
 ## Live-provider acceptance
 
 Use the ordered [browser and live AI checklist](verification.md#browser-and-live-ai-acceptance)
 for all five proposals. Record elapsed time, group overlap/retries, token usage
 where available, exception reasons and downloaded-workbook comparisons. Repeat a
-proposal to assess normalized-value consistency. Cancellation while queued,
+proposal to assess normalized-value consistency. Compare default 3 against opt-in 6
+using the same source, deployed code/provider/model and fresh sessions; record
+actual elapsed time, stage counts, splits, rate waits and output differences. Cancellation while queued,
 retry-cache reuse, replacement and stale-result rejection are part of that same
 checklist; no independent acceptance status is claimed here.
 

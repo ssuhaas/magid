@@ -6,6 +6,7 @@
     "normalization-runner.test.mjs",
     "process-proposal.test.mjs",
     "request-slots.test.mjs",
+    "scope-planner.test.mjs",
     "session-coordinator.test.mjs",
     "targeted-ai.test.mjs",
     "verification-plan.test.mjs"

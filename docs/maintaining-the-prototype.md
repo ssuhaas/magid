@@ -33,8 +33,8 @@ remaining-debt and deferred-work list. This guide documents change boundaries.
 The page owns session lifetime, cancellation, the current-run guard and React
 state. `prepareNormalization` clones the current records and applies the existing
 deterministic policies. `runNormalization` accepts parsed workbook data and a
-temporary cache, builds the same targeted three-item groups (or selected discovery
-region), and stages extraction plus independent evaluation. It does not change
+temporary cache, defaults to targeted three-item groups (or a selected discovery
+region), with the optional bounded grouping experiment described in [AI processing](ai-processing.md#bounded-grouping-experiment), and stages extraction plus independent evaluation. It does not change
 controller proofs or publish records while waiting for AI.
 
 After the await, `finalizeNormalization` calls the supplied ownership guard before
