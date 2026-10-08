@@ -22,3 +22,19 @@ Original private source-workbook tests check the callable interface separately.
 
 Transfer the entire folder, run npm ci, configure the server model credential,
 and call createBidNormalizer. See its README for API and CLI examples and limits.
+
+## Item completeness
+
+The portable path inventories populated source cells, then recovers unaccounted
+regions on every sheet, including recognized layouts and partial mappings.
+Recovery has an explicit per-cell accounting contract. Known product cells must
+be anchors; missing accounting, ambiguous groups and unusable recovered items
+reject the call before export. Hidden populated content and oversized unknown
+contiguous blocks also reject rather than silently disappearing. No review UI,
+evaluation stage or additional return artifact is introduced.
+
+The five-workbook regression uses controlled responses: four preserve their
+established item counts; Berry verifies that a response which excludes the old
+ambiguous groups cannot return a deceptively complete workbook. Live AI recovery
+of those groups remains an acceptance check. Cell accounting cannot establish
+perfect semantic classification on arbitrary unseen layouts.

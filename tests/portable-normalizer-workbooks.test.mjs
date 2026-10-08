@@ -14,7 +14,7 @@ const cases = [
   ['Berry', '5c3b8658-ae6e-4236-aa3e-731f507b82fc/PPE List.xlsx', 76, 10],
 ];
 for (const [name, path, count, expectedRequests] of cases) {
-  test(`${name}: portable API preserves all source occurrences and template sheets without review or evaluation`, async () => {
+  test(`${name}: portable API preserves source occurrences or explicitly rejects unresolved coverage`, async () => {
     const input = readFileSync('../attachments/' + path);
     const original = prepareDescriptions(extract(readWorkbook(input)).records, readWorkbook(input));
     let requests = 0;
@@ -26,11 +26,20 @@ for (const [name, path, count, expectedRequests] of cases) {
       if (scope.mode === 'enrich') requests++;
       const proposal = { items: scope.records.map(r => ({ recordId: r.id, sheet: r.sheet,
         anchors: r.anchors, section: '', ambiguous: false, boundaryReason: 'Original source occurrence.',
-        fields: [], extras: [] })), warnings: [] };
+        fields: [], extras: [] })), warnings: [],
+        ...(scope.mode === 'discover' ? { nonItems: scope.cells.filter(c => c.eligibleAnchor).map(c => ({
+          sheet: c.sheet, cell: c.cell, disposition: 'context', quote: c.raw,
+          reason: 'Controlled fixture context; this test does not certify live semantic classification.' })) } : {}) };
       return Response.json({ status: 'completed', output: [{ type: 'message', content: [
         { type: 'output_text', text: JSON.stringify(proposal) },
       ] }] });
     } });
+    if (name === 'Berry') {
+      // The old parser collapsed several stock codes into two ambiguous groups.
+      // An AI response that calls those missing products context must not export 74 rows.
+      await assert.rejects(normalize(input, { filename: path.split('/').at(-1) }), /Missing product occurrence at Sheet1!/);
+      return;
+    }
     const bytes = await normalize(input, { filename: path.split('/').at(-1) });
     assert.equal(requests, expectedRequests);
     const out = readWorkbook(bytes), sheet = out.sheets.find(s => s.name === 'AI BID IDENTIFICATION TEMPLATE');

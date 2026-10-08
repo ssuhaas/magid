@@ -17,7 +17,7 @@ function collect(path) {
   for (const match of bytes.toString().matchAll(/\b(?:from\s*|import\s*)['"](\.[^'"]+)['"]/g))
     collect(resolve(dirname(path), match[1]));
 }
-for (const entry of ['normalize.mjs', 'projection.mjs']) {
+for (const entry of ['normalize.mjs', 'projection.mjs', 'item-coverage.mjs']) {
   const text = readFileSync(resolve(destination, entry), 'utf8');
   for (const match of text.matchAll(/['"]\.\/src\/([^'"]+)['"]/g))
     collect(resolve(root, 'lib', match[1]));

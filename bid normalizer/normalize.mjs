@@ -7,31 +7,9 @@ import { deterministicCompleteness } from './src/canonical/completeness.mjs';
 import { planEnrichmentScopes } from './src/ai/scope-planner.mjs';
 import { buildScope, applyProposal } from './src/ai/client.mjs';
 import { validateProposal } from './src/ai/contracts.mjs';
-import { callExtractionStage } from './src/ai/service.mjs';
+import { callExtractionStage, callDiscoveryStage } from './src/ai/service.mjs';
 import { projectWorkbookRecords } from './projection.mjs';
-import { sourceLayout } from './src/canonical/source-policy.mjs';
-
-function discoveryScopes(book, sheet, digest, start, end) {
-  if (end - start > 100) {
-    const middle = Math.floor((start + end) / 2);
-    return [...discoveryScopes(book, sheet, digest, start, middle),
-      ...discoveryScopes(book, sheet, digest, middle + 1, end)];
-  }
-  const populated = Object.keys(sheet.cells).some(a => {
-    const n = Number(a.replace(/\D/g, ''));
-    return n >= start && n <= end;
-  });
-  if (!populated) return [];
-  try {
-    return [buildScope(book, [], { mode: 'discover', digest, scopeId: randomUUID(),
-      sheet: sheet.name, start, end })];
-  } catch (error) {
-    if (end === start || !error.message.includes('source scope is too large')) throw error;
-    const middle = Math.floor((start + end) / 2);
-    return [...discoveryScopes(book, sheet, digest, start, middle),
-      ...discoveryScopes(book, sheet, digest, middle + 1, end)];
-  }
-}
+import { planRecovery, assertRecoveredItems, assertProductAnchors } from './item-coverage.mjs';
 
 /** No browser, HTTP route, durable state, model evaluation or human decision dependency. */
 export async function normalize(proposalBytes, templateBytes, config, {
@@ -55,18 +33,10 @@ export async function normalize(proposalBytes, templateBytes, config, {
       ? mapRows(book, mapping.sheet, mapping.start, mapping.end, mapping.columns)
       : extract(book).records;
     const baseline = prepareNormalization(book, prepareDescriptions(identified, book),
-      createReviewController(), {});
+      createReviewController(), {}).filter(record => !record.ambiguous && !record.extras['Additional Source Code']?.value);
     const unresolved = baseline.filter(r => !deterministicCompleteness(r, book));
     const scopes = planEnrichmentScopes(book, unresolved, { digest, maxItems: config.maxItems });
-    if (!mapping) {
-      for (const sheet of book.sheets) {
-        if (sheet.hidden !== 'visible' || sourceLayout(sheet) ||
-            baseline.some(r => r.sheet === sheet.name)) continue;
-        const rows = Object.keys(sheet.cells).map(a => Number(a.replace(/\D/g, '')));
-        if (rows.length) scopes.push(...discoveryScopes(book, sheet, digest,
-          Math.min(...rows), Math.max(...rows)));
-      }
-    }
+    scopes.push(...planRecovery(book, baseline, digest));
     report({ stage: 'planned', items: baseline.length,
       skippedItems: baseline.length - unresolved.length, groups: scopes.length });
     const queue = [...scopes], results = new Map();
@@ -78,7 +48,7 @@ export async function normalize(proposalBytes, templateBytes, config, {
           const scope = queue.shift();
           let envelope;
           try {
-            envelope = await callExtractionStage(scope, { provider: config.provider,
+            envelope = await (scope.mode === 'discover' ? callDiscoveryStage : callExtractionStage)(scope, { provider: config.provider,
               key: config.key, model: config.model, fetchImpl: config.fetchImpl,
               signal: abort.signal });
           } catch (error) {
@@ -90,12 +60,19 @@ export async function normalize(proposalBytes, templateBytes, config, {
               queue.push(...parts);
               continue;
             }
+            if (scope.mode === 'discover') {
+              const cells = scope.cells.filter(c => c.eligibleAnchor);
+              throw Error(`Source coverage could not be resolved at ${cells[0]?.sheet}!${cells.slice(0, 8).map(c => c.cell).join(', ')}. ${error.message}`);
+            }
             throw error;
           }
           check();
           if (envelope.digest !== digest || envelope.scopeId !== scope.scopeId)
             throw Error('Extraction belongs to a different proposal.');
           validateProposal(scope, envelope.proposal);
+          if (envelope.proposal.items.some(item => item.ambiguous))
+            throw Error('Unresolved product boundaries at ' + scope.cells.filter(c => c.eligibleAnchor).slice(0, 8).map(c => c.sheet + '!' + c.cell).join(', '));
+          if (scope.mode === 'discover') assertProductAnchors(book, scope, envelope.proposal);
           results.set(scope.scopeId, envelope);
           report({ stage: 'extract', completed: ++completed, groups: scopes.length });
         }
@@ -122,6 +99,7 @@ export async function normalize(proposalBytes, templateBytes, config, {
       occupied.add(key);
     }
     const projected = projectWorkbookRecords(records, book);
+    assertRecoveredItems(records, projected.records);
     check();
     const output = exportWorkbook(templateBytes, projected.records, projected.columns);
     check();
