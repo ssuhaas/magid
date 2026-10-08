@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "verify": "node scripts/verify.mjs",
     "verify:core": "node scripts/verify.mjs --core",
-    "fixtures:setup": "node scripts/setup-fixtures.mjs"
+    "fixtures:setup": "node scripts/setup-fixtures.mjs",
+    "bundle:normalizer": "node scripts/bundle-normalizer.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

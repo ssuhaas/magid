@@ -65,3 +65,10 @@ of whole-bid accuracy, live-provider performance or a browser-saved workbook. Us
 the [acceptance checklist](docs/verification.md#browser-and-live-ai-acceptance) for
 Daikin, Hyundai, Berry Global, Tesla and Grainger before declaring this version
 accepted. PR merges and Sites deployment are separate steps.
+# Portable pipeline component
+
+The [bid normalizer folder](bid%20normalizer/README.md) can be copied into another
+repository. It provides proposal-bytes → normalized-Excel-bytes processing without
+the current UI, mandatory human review or a model evaluation stage. Independent
+evaluation belongs to the consuming pipeline. This leaves the prototype's strict
+review/export behavior unchanged. See [portable backend details](docs/portable-normalizer.md).

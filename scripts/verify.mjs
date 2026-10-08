@@ -63,6 +63,7 @@ try {
     console.log('CORE ONLY: real-workbook regression checks are not included. This is not full acceptance.');
   }
   const pythonVersion = run('python-version', python, ['--version']);
+  run('portable-runtime', process.execPath, ['scripts/bundle-normalizer.mjs', '--check']);
   report.pythonVersion = (pythonVersion.stdout || pythonVersion.stderr).trim();
   run('javascript-tests', process.execPath, ['--test', ...selected.map(name => `tests/${name}`)]);
   run('types', process.execPath, ['node_modules/typescript/bin/tsc', '--noEmit', '--incremental', 'false']);

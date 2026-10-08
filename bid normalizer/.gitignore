@@ -1,0 +1,7 @@
+node_modules/
+.env
+.env.*
+*.xlsx
+!template.xlsx
+*.xlsm
+npm-debug.log*
