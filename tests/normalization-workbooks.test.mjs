@@ -54,7 +54,8 @@ for (const maxItems of [3, 6])
           observer: () => {},
           progress: () => {},
           // Controlled boundary disagreement exercises exception routing without AI guesses.
-          process: async (scope) => response(scope, 'review'),
+          // Berry has closed stock lanes that no longer need a model verdict.
+          process: async (scope) => response(scope, name === 'Berry' ? 'supported' : 'review'),
         };
       const oldScopes = Array.from({ length: Math.ceil(oldBaseline.length / 3) }, (_, i) =>
         buildScope(book, oldBaseline.slice(i * 3, i * 3 + 3), {
@@ -89,6 +90,7 @@ for (const maxItems of [3, 6])
       });
       const oldRecords = legacyFinalize(book, oldBaseline, oldResult, prior, columns);
       assert.equal(records.length, count);
+      assert.equal(result.deterministicSkippedIds.length, name === 'Berry' ? 47 : 0);
       assert.deepEqual(records, oldRecords);
       assert.deepEqual(items, original);
       assert.deepEqual(controllerState(current), controllerState(prior));

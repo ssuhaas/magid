@@ -17,10 +17,22 @@ client-operated access requires a separate decision before changing that audienc
 - An automatic blank is not proof that the original source contains no useful fact.
   Those fields remain eligible for source-backed semantic extraction. Unsupported
   guesses stay blank under the existing quarantine policy.
+- Recognized closed stock-list lanes can skip both AI stages under the reproducible
+  `closed-stock-lane-v1` rule. Exactly one literal code, optional plain product family,
+  empty adjacent cells and source-only automatic fields are required. General
+  descriptions, other codes, unknown categories, formulas, hidden source and
+  ambiguous boundaries cannot qualify. A copied description or automatic blank
+  alone is insufficient. This currently covers Berry-style lanes, not Tesla,
+  Daikin, Hyundai or Grainger narratives. New patterns need tested absence rules.
 - Original source cells, headers, current values and extras remain available. The
-  separate evaluator still checks every occurrence for boundary problems, incorrect
+  separate evaluator checks every remaining occurrence for boundary problems, incorrect
   candidates and source-backed information missed by the output. A discrepancy in
   a protected current value becomes an exception through `missing`.
+- Skipped occurrences remain unchanged in the output. Their source proof is
+  reproduced before finalization; every non-skipped baseline row needs its actual
+  evaluation. All-skipped runs make zero provider calls and invent no evaluation
+  verdicts. Source coverage, matching identity, optional column approval and the
+  independent final Excel validators remain required.
 - Validated semantic units and manufacturer names use the existing independently
   evaluated approval policy. Numerical self-reported confidence does not grant
   approval. Formulas, packaging conflicts, hidden/quote lanes, namespace ambiguity
@@ -57,11 +69,14 @@ upload description preparation, deterministic automation and three-item scopes.
 | Hyundai      |    35 |     12 |                    420 |                    296 |     29.5% |
 | Tesla        |   476 |    159 |                  5,712 |                  2,449 |     57.1% |
 | Grainger     |    31 |     11 |                    372 |                    306 |     17.7% |
-| Berry Global |    76 |     26 |                    912 |                    821 |     10.0% |
+| Berry Global |    76 |     10 |                    912 |                    304 |     66.7% |
 
 These counts measure fields eligible for output generation, not actual filled
-values, tokens, review exceptions or wall-clock speed. Extraction and evaluation
-still require two provider calls per group before retries. Input context is retained;
+values, tokens, review exceptions or wall-clock speed. Berry skips 47 source-proven
+occurrences; 29 remain in ten groups, reducing planned calls from 52 to 20. Other
+samples currently skip zero rows. The script separately reports skipped items and
+field protection among remaining AI items. Extraction and evaluation require two
+provider calls per remaining group before retries. Input context is retained;
 its token count is not claimed to shrink. Two concurrent groups can reduce serial
 waiting, but provider limits and retries may offset the gain.
 
@@ -84,11 +99,11 @@ scope containing at most 36 unresolved field targets and 60,000 serialized sourc
 bytes. Fully unresolved items therefore stay at three per group; low-work items
 can share up to six. A single larger item retains all evidence and the existing
 hard 350,000-byte/900-cell limit. Context is never trimmed to fit the budget.
-Independent evaluation still checks every occurrence. Existing failure/cancellation,
+Independent evaluation checks every occurrence without a deterministic completeness proof. Existing failure/cancellation,
 single-item split, source ordering, cache binding and final export gates remain.
 Changing the grouping bound invalidates the retry plan.
 
-The offline command now compares both plans, keeping the original target totals:
+The offline command compares both plans after applying the same row-skipping rule:
 
 | Proposal     | Default groups / calls | Bounded groups / calls | Planned call reduction |
 | ------------ | ---------------------: | ---------------------: | ---------------------: |
@@ -96,7 +111,7 @@ The offline command now compares both plans, keeping the original target totals:
 | Hyundai      |                12 / 24 |                10 / 20 |                  16.7% |
 | Tesla        |              159 / 318 |               80 / 160 |                  49.7% |
 | Grainger     |                11 / 22 |                11 / 22 |                     0% |
-| Berry Global |                26 / 52 |                26 / 52 |                     0% |
+| Berry Global |                10 / 20 |                10 / 20 |                     0% |
 
 These are planned calls before retries and cache reuse, not elapsed-time savings.
 The script also reports serialized source payload bytes and local planning time;
@@ -115,6 +130,13 @@ Cached stages do not emit new request timings. Summaries contain no source value
 credentials or provider reasoning. Diagnostics remain temporary and optional.
 
 ## Live-provider acceptance
+
+For Berry, the Pipeline plan must show 76 original items, 47 deterministic skips,
+29 AI items and ten default groups. Check that all 76 source occurrences remain in
+the result and ambiguous groups still need review. Compare retained codes/category
+and unsupported blanks against the source in the downloaded Excel file. Add a
+description, second code or packaging detail to a formerly closed lane: it must
+return to AI processing. These checks are pending live acceptance.
 
 Use the ordered [browser and live AI checklist](verification.md#browser-and-live-ai-acceptance)
 for all five proposals. Record elapsed time, group overlap/retries, token usage

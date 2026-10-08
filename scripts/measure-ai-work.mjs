@@ -10,6 +10,7 @@ import {
   pruneRedundantExtras,
 } from '../lib/canonical/pipeline.mjs';
 import { planEnrichmentScopes, scopeWork } from '../lib/ai/scope-planner.mjs';
+import { deterministicCompleteness } from '../lib/canonical/completeness.mjs';
 
 // Private fixtures stay outside Git; use the same root as the verification setup.
 const root = resolve(process.argv[2] || process.env.MAGID_FIXTURE_ROOT || 'tests/fixtures');
@@ -31,10 +32,11 @@ const results = cases.map(([name, path]) => {
   automateBoundaries(controller, records, book);
   controller.automate(records, book);
   automateCoverage(controller, book, records, {});
+  const unresolved = records.filter(r => !deterministicCompleteness(r, book));
   const measure = (maxItems) => {
     let next = 0;
     const began = performance.now();
-    const scopes = planEnrichmentScopes(book, records, {
+    const scopes = planEnrichmentScopes(book, unresolved, {
       digest,
       maxItems,
       createScopeId: () => `measure-${++next}`,
@@ -45,21 +47,25 @@ const results = cases.map(([name, path]) => {
     candidate = measure(6);
   if (fixed.requestedFields !== candidate.requestedFields)
     throw Error('Grouping changed field targets.');
-  const protectedFields = records.length * 12 - fixed.requestedFields;
+  const protectedFields = unresolved.length * 12 - fixed.requestedFields;
   return {
     name,
     digest,
     items: records.length,
+    deterministicSkippedItems: records.length - unresolved.length,
+    aiItems: unresolved.length,
     groups: fixed.groups,
     providerCallsBeforeRetry: fixed.providerCallsBeforeRetry,
     previousFieldTargets: records.length * 12,
     requestedFieldTargets: fixed.requestedFields,
     protectedFields,
-    targetReductionPercent: Math.round((protectedFields / (records.length * 12)) * 1000) / 10,
+    targetReductionPercent: unresolved.length
+      ? Math.round((protectedFields / (unresolved.length * 12)) * 1000) / 10 : 0,
     sourceCellsWithRepeatedContext: fixed.sourceCellsWithRepeatedContext,
     fixedThree: fixed,
     boundedSix: candidate,
-    plannedCallReductionPercent: Math.round((1 - candidate.groups / fixed.groups) * 1000) / 10,
+    plannedCallReductionPercent: fixed.groups
+      ? Math.round((1 - candidate.groups / fixed.groups) * 1000) / 10 : 0,
   };
 });
 console.log(

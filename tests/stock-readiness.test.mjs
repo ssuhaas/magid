@@ -1,5 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from './helpers/fixtures.mjs';import {createHash} from 'node:crypto';import {spawnSync} from 'node:child_process';
 import {readWorkbook,extract} from '../lib/workbook.mjs';import {stockCodeReady} from '../lib/canonical/identity.mjs';import {createReviewController,buildCanonical} from '../lib/canonical/bridge.mjs';import {validate} from '../lib/canonical/validator.mjs';import {automateBoundaries,automateCoverage} from '../lib/canonical/pipeline.mjs';import {coverageIndex,prepareCoverage,applyCoverage,approveLayout} from '../lib/canonical/coverage.mjs';import {exportReviewedWorkbook,finalReadiness} from '../lib/canonical/export.mjs';import {reviewStats} from '../lib/ui/review.mjs';
+import { createNormalizationCache, prepareNormalization, runNormalization, finalizeNormalization } from '../lib/ai/normalize-proposal.mjs';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 function setup(){const proposalBytes=readFileSync('../attachments/5c3b8658-ae6e-4236-aa3e-731f507b82fc/PPE List.xlsx'),templateBytes=readFileSync('public/template.xlsx'),book=readWorkbook(proposalBytes),all=extract(book).records,records=all.filter(r=>['B4','B7','H32','H43'].includes(r.anchors[0])),controller=createReviewController(),columns={'Source Product ID':'approved'};automateBoundaries(controller,records,book);controller.automate(records,book);controller.column('Source Product ID','approved');return {book,all,records,controller,columns,proposalBytes,templateBytes,name:'PPE List.xlsx',digest:hash(proposalBytes),templateDigest:hash(templateBytes),expectedSourceDigest:hash(proposalBytes),coverageConfirmed:true};}
 function coverage(s){const index=coverageIndex(s.book,s.records,s.controller);for(const sheet of s.book.sheets){const used=new Set(s.records.flatMap(r=>[...r.anchors,...Object.values(r.values).flatMap(f=>f.evidence),...Object.values(r.extras).flatMap(f=>f.evidence)]));for(const disposition of ['item','excluded']){const addresses=Object.keys(sheet.cells).filter(a=>used.has(a)===(disposition==='item'));for(let i=0;i<addresses.length;i+=100)applyCoverage(s.controller,index,prepareCoverage(index,{sheet:sheet.name,addresses:addresses.slice(i,i+100),disposition,role:disposition==='item'?'customer_specification':'context',reason:'Test-only subset: verify selected original stock codes and explicitly account for other source cells outside this fixture.'}));}approveLayout(s.controller,index,sheet.name,'Test-only source subset accounts for every original cell; this is not a real bid exclusion.');}}
@@ -9,3 +10,32 @@ test('canonical identity cannot be forged through extension names or values, UI 
 test('declining or editing the retained stock code immediately reopens review; duplicate occurrences stay separate',()=>{const s=setup(),r=s.records[0];assert.equal(reviewStats([r],s.columns,s.controller,s.book).pendingItems,0);assert.equal(reviewStats([r],{'Source Product ID':'declined'},s.controller,s.book).pendingItems,1);const repeated=structuredClone(r);repeated.id='second-occurrence';assert.equal(reviewStats([r,repeated],s.columns,s.controller,s.book).reviewed,2);r.extras['Source Product ID'].value='';assert.equal(reviewStats([r],s.columns,s.controller,s.book).pendingItems,1);});
 test('Python and JavaScript validators agree on accepted and tampered stock identities using the independent trust registry',()=>{const s=setup();coverage(s);const snap=buildCanonical(s);const trusted=Object.fromEntries(Object.entries(snap.trusted).map(([k,v])=>[k,v instanceof Map?[...v]:[...v]]));const py=`import sys,json\nsys.path.insert(0,'lib/canonical/reference')\nfrom validator import validate\nd=json.load(sys.stdin);t={}\nfor k,v in d['trusted'].items():\n if k in ('layout_approvals','review_event_ids'):t[k]=set(v)\n else:t[k]={tuple(json.loads(a)) if a.startswith('[') else a:b for a,b in v}\nprint(json.dumps(validate(d['run'],final=True,trusted=t)))\n`;for(const changed of [false,true]){const run=structuredClone(snap.run);if(changed)run.extensions[0].values[0].value='invented';const result=spawnSync(process.env.PYTHON || 'python3',['-c',py],{input:JSON.stringify({run,trusted}),encoding:'utf8'});assert.equal(result.status,0,result.stderr);const codes=es=>[...new Set(es.map(e=>e.code))].sort();assert.deepEqual(codes(validate(run,{final:true,trusted:snap.trusted})),codes(JSON.parse(result.stdout)));}});
 test('all 74 clear original PPE occurrences become eligible with one stock-column decision; two ambiguous groups remain',()=>{const s=setup(),r=s.all;automateBoundaries(s.controller,r,s.book);s.controller.automate(r,s.book);const columns={'Source Product ID':'approved','Additional Source Code':'approved'};assert.equal(r.filter(x=>stockCodeReady(x,columns,s.book)).length,74);assert.equal(reviewStats(r,columns,s.controller,s.book).pendingItems,2);const codeOnly=r.find(x=>!x.values.E.value&&!x.ambiguous);codeOnly.values.D.value='';assert.equal(stockCodeReady(codeOnly,columns,s.book),true);codeOnly.values.M={value:'10',status:'pending',evidence:[],reason:'Uncertain packaging'};assert.equal(reviewStats([codeOnly],columns,s.controller,s.book).pendingItems,1);});
+
+test('real closed stock lanes skip AI and pass independent final export/readback without inferred facts', async () => {
+  const s = setup();
+  s.records = s.records.filter(r => ['B4', 'B7'].includes(r.anchors[0]));
+  s.controller.requireEvaluation();
+  const baseline = prepareNormalization(s.book, s.records, s.controller, s.columns);
+  const result = await runNormalization({
+    book: s.book, baseline, sourceDigest: s.digest, sessionCache: createNormalizationCache(),
+    generation: 1, revision: 0, discover: false,
+    selection: { sheet: s.book.sheets[0].name, start: '1', end: '7' },
+    check: () => {}, signal: new AbortController().signal, observer: () => {}, progress: () => {},
+    process: async () => { throw Error('Closed rows must not call AI.'); },
+  });
+  assert.equal(result.deterministicSkippedIds.length, 2);
+  s.records = finalizeNormalization({ ...s, baseline, result, check: () => {} });
+  assert.ok(finalReadiness(s).messages.length, 'source coverage is still a separate gate');
+  coverage(s); // Explicit test-only exclusions for cells outside this source subset.
+  assert.deepEqual(finalReadiness(s).messages, []);
+  const out = readWorkbook(await exportReviewedWorkbook(s)).sheets.find(x => x.name === 'AI BID IDENTIFICATION TEMPLATE');
+  assert.equal(out.cells.N2.raw, '2CVG3');
+  assert.equal(out.cells.N3.raw, '4JND4');
+  assert.equal(out.cells.D2.raw, 'Goggles');
+  for (const col of ['B', 'C', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'])
+    assert.equal(out.cells[col + '2'], undefined);
+  assert.equal(s.controller.fields.size, 0);
+  s.controller.column('Source Product ID', 'declined');
+  s.columns['Source Product ID'] = 'declined';
+  assert.ok(finalReadiness(s).messages.length, 'skipping AI cannot approve an optional column');
+});

@@ -89,6 +89,8 @@ export type ProposalProcessingOptions = {
 };
 /** Staged candidates only. The caller must recheck ownership before committing. */
 export type ProposalProcessingResult = {
+  /** Staged IDs only; finalization must reproduce their source completeness proof. */
+  deterministicSkippedIds?: string[];
   proposed: Item[];
   metadata: ColumnMetadata;
   notices: string[];
