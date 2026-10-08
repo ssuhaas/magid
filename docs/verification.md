@@ -91,6 +91,10 @@ Answer these in order:
    elapsed time, planned/completed groups, overlap of concurrent groups, provider/model
    and token usage when returned, plus failed/retried groups. Missing token usage is
    unknown, not zero. A canceled run is not complete.
+   For Berry, also check 47 deterministic skips and 29 AI items in the Pipeline
+   plan (ten groups at the default setting). Skipped rows must still appear in
+   preview/export. Add a description or extra code to a closed row and rerun;
+   that occurrence must go to AI. No skip rule currently applies to the other four samples.
 3. Are direct supported values automatic and unsupported fields blank? Inspect
    known source-backed examples, not only the absence of warnings.
 4. For a real exception, does View in proposal show the original cell? Does

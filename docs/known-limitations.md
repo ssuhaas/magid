@@ -40,6 +40,12 @@ Update these guides in the same PR when behavior or verification scope changes.
 
 ## Accuracy and layout coverage
 
+Whole-row AI skipping currently proves completeness only for closed Berry-style
+stock lanes (47 of 76 original occurrences). It does not skip the other four
+sample layouts or generic descriptions. Extending it requires source-backed
+absence rules; filled cells, reviewer statuses and `auto_blank` are insufficient.
+Live-provider speed and downloaded-output comparison remain pending.
+
 Deterministic layout rules cover the supplied proposal patterns, not every Excel
 bid format. Mapping and selected-region AI discovery are available for unfamiliar
 layouts; ambiguous boundaries still need source rules or reviewer decisions.

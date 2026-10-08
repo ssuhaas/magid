@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeRecord } from '../lib/workbook.mjs';
+import { makeRecord, extract } from '../lib/workbook.mjs';
 import { processStages } from '../lib/ai/stages.mjs';
 import {
   createNormalizationCache,
@@ -236,4 +236,99 @@ test('run timing aggregates stage requests across groups and remains separate fr
     /Provider failed/,
   );
   assert.equal(failed.at(-1).detail.outcome, 'failed');
+});
+
+function stockFixture() {
+  const f = fixture(0);
+  const s = f.book.sheets[0];
+  for (const [address, raw] of Object.entries({
+    A1: 'Item', B1: 'Part #', D1: 'Item', E1: 'Part #', G1: 'Item', H1: 'Part #',
+    A3: 'Goggles', B4: '001AB', E4: '02CD',
+  })) s.cells[address] = { raw, type: 's', formula: null };
+  f.book.population = Object.keys(s.cells).length;
+  f.items = extract(f.book).records;
+  f.baseline = prepareNormalization(f.book, f.items, f.controller, f.columns);
+  return f;
+}
+
+test('proven closed stock rows skip both AI passes, preserve source values and still stage completion', async () => {
+  const f = stockFixture(), events = [];
+  const result = await runNormalization({ ...f, observer: e => events.push(e),
+    process: async () => { throw Error('No provider calls permitted.'); } });
+  assert.deepEqual(result.deterministicSkippedIds, f.baseline.map(r => r.id));
+  assert.equal(result.evaluations.length, 0, 'no invented model verdicts');
+  assert.deepEqual(result.proposed, f.baseline);
+  assert.equal(events[0].detail.providerCallsBeforeRetry, 0);
+  assert.equal(events[0].detail.deterministicSkippedItems, 2);
+  assert.equal(f.controller.evaluationComplete, false);
+  finalizeNormalization({ ...f, result });
+  assert.equal(f.controller.evaluationComplete, true);
+  assert.equal(f.controller.evaluated.size, 0);
+  assert.equal(f.controller.fields.size, 0, 'no fabricated human decisions');
+});
+
+test('mixed rows keep descriptions and adjacent codes in AI while skipped occurrences stay untouched', async () => {
+  const f = stockFixture();
+  f.book.sheets[0].cells.D4 = { raw: 'Gloves size XL, 200 pairs per box', type: 's', formula: null };
+  f.items = extract(f.book).records;
+  f.baseline = prepareNormalization(f.book, f.items, f.controller, f.columns);
+  const scopes = [];
+  const result = await runNormalization({ ...f, process: async s => { scopes.push(s); return response(s); } });
+  assert.deepEqual(scopes.flatMap(s => s.records.map(r => r.anchors)), [['E4']]);
+  assert.deepEqual(result.deterministicSkippedIds, [f.baseline[0].id]);
+  assert.deepEqual(result.proposed.find(r => r.id === f.baseline[0].id), f.baseline[0]);
+  finalizeNormalization({ ...f, result });
+  const forged = { ...result, evaluations: [] };
+  assert.throws(() => finalizeNormalization({ ...f, result: forged }), /independent AI check/);
+});
+
+test('blank statuses, unfamiliar headings, formulas, hidden source and ambiguous code relationships never prove completeness', async () => {
+  for (const mutate of [
+    f => f.book.sheets[0].cells.C4 = { raw: 'alternate-002', type: 's', formula: null },
+    f => f.book.sheets[0].cells.C4 = { raw: '', type: 's', formula: 'A1' },
+    f => f.book.sheets[0].cells.B1.formula = 'A1',
+    f => f.book.sheets[0].hiddenRows.push('4'),
+    f => f.baseline[0].ambiguous = true,
+    f => f.baseline[0].evaluationBoundaryReview = true,
+    f => f.baseline[0].values.G.status = 'accepted',
+    f => f.baseline[0].values.D.value = 'Acme XL goggles',
+    f => f.baseline[0].extras['Source Product ID'].alternatives = [{ ...f.baseline[0].extras['Source Product ID'] }],
+    f => f.book.sheets[0].cells.A2 = { raw: 'Quantity', type: 's', formula: null },
+  ]) {
+    const f = stockFixture(); mutate(f);
+    const result = await runNormalization(f);
+    assert.ok(!result.deterministicSkippedIds.includes(f.baseline[0].id));
+    assert.ok(f.sessionCache.plan.scopes.some(s => s.records.some(r => r.id === f.baseline[0].id)));
+  }
+  const ordinary = fixture(1);
+  const result = await runNormalization(ordinary);
+  assert.deepEqual(result.deterministicSkippedIds, [], 'generic narrative auto blanks need AI');
+});
+
+test('source or skipped output changes are rejected before any controller completion', async () => {
+  for (const mutate of [
+    (f, r) => f.book.sheets[0].cells.C4 = { raw: 'size XL', type: 's', formula: null },
+    (f, r) => r.proposed[0].extras['Source Product ID'].value = 'invented',
+    (f, r) => r.deterministicSkippedIds.push(r.deterministicSkippedIds[0]),
+    (f, r) => r.deterministicSkippedIds.push('unknown-row'),
+  ]) {
+    const f = stockFixture(), result = await runNormalization(f);
+    result.proposed = structuredClone(result.proposed);
+    mutate(f, result);
+    const prior = controllerState(f.controller);
+    assert.throws(() => finalizeNormalization({ ...f, result }), /completeness|skip/);
+    assert.deepEqual(controllerState(f.controller), prior);
+  }
+});
+
+test('new unresolved source invalidates an all-skipped retry plan and cancellation still rejects zero-call work', async () => {
+  const f = stockFixture();
+  await runNormalization(f);
+  const old = f.sessionCache.plan;
+  f.book.sheets[0].cells.C4 = { raw: 'second-code', type: 's', formula: null };
+  await runNormalization(f);
+  assert.notEqual(f.sessionCache.plan, old);
+  assert.equal(f.sessionCache.plan.scopes.length, 1);
+  const abort = new AbortController(); abort.abort();
+  await assert.rejects(runNormalization({ ...stockFixture(), signal: abort.signal }), /canceled/);
 });
