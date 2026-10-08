@@ -10,14 +10,14 @@ The earlier check recognized `100/BX` but missed explicit pair contents and comp
 packaging shorthand. These six original recurring-sheet rows could therefore gain
 a deterministic count approval despite unclear packaging levels:
 
-| Source row | Original description expression | Purchasing unit | Stored piece count | Current result |
-| --- | --- | --- | ---: | --- |
-| B173 | 40 PR PER BOX | PR | 240 | Focused packaging review |
-| B283 | 100 PR/CS | BG | 20 | Focused packaging review |
-| B303 | 4PK | PK | 1 | Focused packaging review |
-| B333 | 100BX 10B/CS | BX | 1 | Focused packaging review |
-| B365 | 100BX 10BX/CA | BX | 1 | Focused packaging review |
-| B376 | 100BX 10B/CS | BX | 1 | Focused packaging review |
+| Source row | Original description expression | Purchasing unit | Stored piece count | Current result           |
+| ---------- | ------------------------------- | --------------- | -----------------: | ------------------------ |
+| B173       | 40 PR PER BOX                   | PR              |                240 | Focused packaging review |
+| B283       | 100 PR/CS                       | BG              |                 20 | Focused packaging review |
+| B303       | 4PK                             | PK              |                  1 | Focused packaging review |
+| B333       | 100BX 10B/CS                    | BX              |                  1 | Focused packaging review |
+| B365       | 100BX 10BX/CA                   | BX              |                  1 | Focused packaging review |
+| B376       | 100BX 10B/CS                    | BX              |                  1 | Focused packaging review |
 
 Counts remain the original strings. The system does not replace 240 with 40, turn
 pairs into pieces, or choose between box/case/bag levels. Explanations identify the
@@ -43,7 +43,7 @@ Tesla aggregate expectations were updated to the corrected counts.
 ## Manufacturer namespace inherited across a newer heading
 
 A constructed source-layout variation reproduced a provenance defect: the old rule
-searched for the nearest *manufacturer* heading and could skip a newer distributor,
+searched for the nearest _manufacturer_ heading and could skip a newer distributor,
 customer or generic part heading in the same column. A later `000123` code could
 therefore inherit an obsolete manufacturer namespace. This is a regression case,
 not a claim that the original five customer workbooks contain this layout.
@@ -77,4 +77,4 @@ hidden-header and unrelated-column cases.
 Live extraction/evaluation reruns on all five proposals and independent inspection
 of the user-downloaded workbooks remain acceptance work. Native Excel opening and
 provider-output consistency are not established by local tests. See
-[AI processing acceptance](ai-processing.md#acceptance-still-required-on-the-live-provider).
+[Browser and live AI acceptance](verification.md#browser-and-live-ai-acceptance).

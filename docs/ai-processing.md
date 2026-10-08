@@ -51,13 +51,13 @@ The root contains `attachments/` with the original five files, matching the
 verification fixture setup. No workbook contents are printed. The script reproduces
 upload description preparation, deterministic automation and three-item scopes.
 
-| Proposal | Items | Groups | Previous field targets | Targeted field targets | Reduction |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Daikin | 338 | 113 | 4,056 | 3,049 | 24.8% |
-| Hyundai | 35 | 12 | 420 | 296 | 29.5% |
-| Tesla | 476 | 159 | 5,712 | 2,449 | 57.1% |
-| Grainger | 31 | 11 | 372 | 306 | 17.7% |
-| Berry Global | 76 | 26 | 912 | 821 | 10.0% |
+| Proposal     | Items | Groups | Previous field targets | Targeted field targets | Reduction |
+| ------------ | ----: | -----: | ---------------------: | ---------------------: | --------: |
+| Daikin       |   338 |    113 |                  4,056 |                  3,049 |     24.8% |
+| Hyundai      |    35 |     12 |                    420 |                    296 |     29.5% |
+| Tesla        |   476 |    159 |                  5,712 |                  2,449 |     57.1% |
+| Grainger     |    31 |     11 |                    372 |                    306 |     17.7% |
+| Berry Global |    76 |     26 |                    912 |                    821 |     10.0% |
 
 These counts measure fields eligible for output generation, not actual filled
 values, tokens, review exceptions or wall-clock speed. Extraction and evaluation
@@ -71,26 +71,17 @@ The temporary Pipeline tab records the planned group/field counts and actual
 nonnegative provider token usage when returned. It never records credentials or
 provider reasoning text. Missing usage is not treated as zero.
 
-## Acceptance still required on the live provider
+## Live-provider acceptance
 
-For each of the five proposals, record elapsed time, planned group count, token
-usage where available, exception counts and exported workbook comparisons. Repeat
-one proposal to assess output consistency. Specifically:
-
-1. Confirm verified units/manufacturer values pass automatically when supported;
-   ambiguous packaging, formulas and namespaces still require review.
-2. Confirm progress reports completed groups while two requests overlap.
-3. Cancel both during processing and while waiting for capacity. No late result,
-   resumed-message text or download-ready state should appear.
-4. Retry after cancellation or a transient failure. Completed stages should be
-   reused; unverified stages must be retried against the same source.
-5. Start another proposal in a separate tab and check capacity waits/cancellation.
-6. Replace a proposal or edit a decision during processing. Old results must not
-   change the new source or restore stale decisions.
-7. Compare download values, literal sizes, leading zeros, annual units, packaging
-   expressions and retained source codes with the expected records.
+Use the ordered [browser and live AI checklist](verification.md#browser-and-live-ai-acceptance)
+for all five proposals. Record elapsed time, group overlap/retries, token usage
+where available, exception reasons and downloaded-workbook comparisons. Repeat a
+proposal to assess normalized-value consistency. Cancellation while queued,
+retry-cache reuse, replacement and stale-result rejection are part of that same
+checklist; no independent acceptance status is claimed here.
 
 Local verification covers concurrency overlap, ordered application, sibling
 cancellation, targeted split retry, field-mask enforcement, per-user admission,
-lease expiry, rate reset, and existing real-workbook/export regressions. Controlled
-provider responses do not establish live accuracy or performance.
+lease expiry, rate reset and real-workbook/export regressions. Controlled provider
+responses do not establish live accuracy or performance. See [known limitations](known-limitations.md)
+for the remaining release work and queue/background-worker boundaries.
