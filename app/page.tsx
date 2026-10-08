@@ -86,6 +86,7 @@ import { fieldContracts } from '@/lib/canonical/field-contracts.mjs';
 import { finalReadiness, exportReviewedWorkbook } from '@/lib/canonical/export.mjs';
 import type { Book, Field, Item, SourceSelection } from '@/lib/review-types';
 import type { ColumnMetadata } from '@/lib/ai/types';
+import { scopeMaxItems } from '@/lib/ai/scope-planner.mjs';
 import { createSessionCoordinator } from '@/lib/session/coordinator.mjs';
 import { parseWorkbookInWorker } from '@/lib/session/parse-workbook.mjs';
 export default function Home() {
@@ -137,6 +138,7 @@ export default function Home() {
     provider: string;
     providerNotice: string;
     concurrency: number;
+    maxItems: number;
   } | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiProgress, setAiProgress] = useState('');
@@ -300,6 +302,7 @@ export default function Home() {
           typeof v.model === 'string'
         )
           setAiConfig({
+            maxItems: scopeMaxItems('maxItems' in v ? v.maxItems : undefined),
             concurrency:
               'concurrency' in v && typeof v.concurrency === 'number' &&
               Number.isInteger(v.concurrency) && v.concurrency >= 1 && v.concurrency <= 2
@@ -723,6 +726,7 @@ export default function Home() {
         discover,
         selection: { sheet, start, end },
         concurrency: aiConfig?.concurrency || 2,
+        maxItems: aiConfig?.maxItems || 3,
         check,
         signal: abort.signal,
         observer: (event) =>

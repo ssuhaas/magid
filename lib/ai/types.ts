@@ -63,7 +63,10 @@ export type StageOptions = {
   progress?: (stage: AIStage | 'waiting', message?: string) => void;
   send?: SendStage;
 };
-export type ProcessStages = (scope: SourceScope, options: StageOptions) => Promise<EvaluatedProposal>;
+export type ProcessStages = (
+  scope: SourceScope,
+  options: StageOptions,
+) => Promise<EvaluatedProposal>;
 /** Existing service error metadata; unknown thrown values are still possible. */
 export type ProcessingError = Error & { status?: number; code?: string; retryAfter?: number };
 export type ColumnMetadata = Record<string, { meaning: string; benefit: string }>;
@@ -103,6 +106,8 @@ export type NormalizationOptions = Omit<ProposalProcessingOptions, 'scopes' | 'c
   sessionCache: NormalizationCache;
   generation: number;
   revision: number;
+  /** Opt-in bound for workload-aware scopes; defaults to the prior three items. */
+  maxItems?: number;
   discover: boolean;
   /** Keep raw selection strings in the retry key; convert only when building scopes. */
   selection: { sheet: string; start: string; end: string };
