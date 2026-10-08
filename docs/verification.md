@@ -1,5 +1,9 @@
 # Repeatable verification
 
+This is the canonical setup and acceptance checklist. [Architecture](architecture.md)
+describes the running pipeline; [Known limitations](known-limitations.md) separates
+remaining release checks, technical debt and deferred features.
+
 ## First setup
 
 Use Node 22.13 or newer and Python 3.12. From the repository root:
@@ -52,8 +56,10 @@ depend on private data, including through another module.
 Python validation and the build. The GitHub workflow
 runs this profile on PRs and main pushes and saves its logs/report for seven days.
 Its report explicitly lists excluded test files. A green core check does **not**
-mean the real-workbook suite or live AI has passed. Before merging, also record
-the full local verification result. CI does not use provider keys or call a model.
+mean the real-workbook suite or live AI has passed. For code changes before merging, also record
+full local verification. For documentation-only changes, inspect described commands
+against the source and check local links; runtime suites need not be rerun solely
+for prose. GitHub still runs the core workflow. CI does not use provider keys or call a model.
 
 If CI fails, inspect its job steps and saved logs before changing the workflow.
 A job that never starts is a runner problem; a test failing after checkout is a
@@ -69,20 +75,22 @@ export changes; run all five (Daikin, Hyundai, Berry Global, Tesla and Grainger)
 before a release or after extraction/readiness changes. Keep this evidence table
 with the release review, without publishing bid values:
 
-| Proposal | Source hash / code commit | AI completed? | Items / exceptions | Reviews required | Export / workbook check | Result / issue |
-| --- | --- | --- | --- | --- | --- | --- |
-| Grainger | | | | | | |
-| Daikin | | | | | | |
-| Hyundai | | | | | | |
-| Berry Global | | | | | | |
-| Tesla | | | | | | |
+| Proposal     | Source hash / code commit / deployed revision | AI completed? | Items / exceptions | Reviews required | Export / workbook check | Result / issue |
+| ------------ | --------------------------------------------- | ------------- | ------------------ | ---------------- | ----------------------- | -------------- |
+| Grainger     |                                               |               |                    |                  |                         |                |
+| Daikin       |                                               |               |                    |                  |                         |                |
+| Hyundai      |                                               |               |                    |                  |                         |                |
+| Berry Global |                                               |               |                    |                  |                         |                |
+| Tesla        |                                               |               |                    |                  |                         |                |
 
 Answer these in order:
 
 1. Does upload finish, and is the item count consistent with the source? Known
    original counts: Grainger 31, Daikin 338, Hyundai 35, Berry 76, Tesla 476.
 2. Do AI extraction **and** independent source evaluation complete? Record
-   elapsed time and any failed/retried groups. A canceled run is not complete.
+   elapsed time, planned/completed groups, overlap of concurrent groups, provider/model
+   and token usage when returned, plus failed/retried groups. Missing token usage is
+   unknown, not zero. A canceled run is not complete.
 3. Are direct supported values automatic and unsupported fields blank? Inspect
    known source-backed examples, not only the absence of warnings.
 4. For a real exception, does View in proposal show the original cell? Does
@@ -100,10 +108,14 @@ Answer these in order:
    values, counters and old notices. Use separate test tabs, not someone’s work.
 8. Is download blocked before required checks finish and enabled afterwards?
    Does the spreadsheet preview show each value’s evidence and explanation?
-9. Download the actual Excel file and open it. Compare source-backed expected
+9. Download the actual Excel file and open it in Excel. Compare source-backed expected
    records, leading-zero identifiers, formulas/annual quantities, packaging,
    edited and blanked fields, excluded items, and approved/declined extras.
    Confirm the other template sheets are unchanged. Save the output for review.
+10. Repeat one live proposal run. Compare normalized values, original occurrences,
+    necessary review exceptions and source evidence. Do not require identical
+    elapsed time, diagnostic timestamps, generated IDs or ZIP bytes. Explain any
+    meaningful value difference before claiming repeatability.
 
 Record **passed**, **failed**, or **blocked**, plus reproduction steps. An app
 export-readback pass is useful evidence but does not prove the browser saved the

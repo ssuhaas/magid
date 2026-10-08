@@ -4,25 +4,12 @@ This is a transient-session prototype. A cleanup must preserve source evidence,
 review decisions, output values, UI wording, and export gates. Structural changes
 do not establish accuracy on a new proposal layout or provider response.
 
-## Code map
+## Current guides
 
-| Location                                               | Responsibility                                                                                            |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `app/page.tsx`                                         | Session lifetime, React state, user actions, and committing completed pipeline results                    |
-| `components/workflow/`                                 | Typed upload, progress, item list/details and download views; callbacks delegate to the page              |
-| `components/review/`                                   | Field review and source/output previews; typed props live in `lib/review-types.ts`                        |
-| `lib/workbook.mjs`, `lib/parse.worker.ts`              | Bounded OOXML parsing, known-layout extraction, and workbook writing                                      |
-| `lib/ai/process-proposal.mjs`                          | Stage source groups, validate responses, split oversized/timed-out groups, collect results                |
-| `lib/ai/stages.mjs`                                    | Request deadlines, temporary stage cache, busy-service waits, and retry                                   |
-| `lib/ai/types.ts`                                      | Schema-derived AI payload types, temporary cache state and processing boundary contracts                  |
-| `lib/ai/normalize-proposal.mjs`                        | Deterministic preparation, retry scope planning, AI runner and guarded synchronous policy application     |
-| `lib/session/coordinator.mjs`                          | Temporary source ownership, operation locks, resource cleanup, retry cache, download URLs and clocks      |
-| `lib/session/parse-workbook.mjs`                       | Parser worker transport, current-owner progress, timeout and completion cleanup                           |
-| `lib/ai/client.mjs`, `contracts.mjs`, `evaluation.mjs` | Evidence scopes, response contracts, and source-grounded candidate application                            |
-| `app/api/extract/route.ts`, `lib/ai/service.mjs`       | Authenticated requests, leases, rate limits, and provider adapters                                        |
-| `lib/canonical/`                                       | Independent approval authority, source rules, dependent-field invalidation, coverage, and final readiness |
-| `lib/ui/review.mjs`                                    | Shared review eligibility, counter totals, batch eligibility, and source-window selection                 |
-| `lib/debug/`, `components/debug/`                      | Temporary diagnostic trace and pipeline view                                                              |
+Use [Architecture](architecture.md) for the single current code map, pipeline,
+runtime limits and provider configuration. Use [Verification](verification.md)
+for setup and acceptance; [Known limitations](known-limitations.md) owns the
+remaining-debt and deferred-work list. This guide documents change boundaries.
 
 ## Boundaries to preserve
 
@@ -134,37 +121,6 @@ Use Prettier 3.6.2 with the repository configuration for app-owned files. Keep
 formatting-only edits separate from functional changes when practical. Preserve
 the dependency lockfile and avoid reformatting vendored UI components or the
 authoritative reference schema as part of application cleanup.
-
-## Remaining technical debt
-
-- AI preparation, scope planning, processing and policy application now live in
-  the normalization runner. Session ownership and resource transitions now live
-  in the coordinator. `app/page.tsx` still coordinates React display state and
-  field controls and the mapping/coverage/extra-column views. The workflow panels
-  now have typed component boundaries. Further extraction should
-  follow feature boundaries and include interaction tests for session replacement,
-  cancellation, stale decisions, and export invalidation. Moving all state into a
-  generic hook would mostly relocate the coupling.
-- `lib/ai/types.ts` derives source scopes, proposals and evaluations from the
-  existing Zod schemas. It defines the session cache, progress observer, service
-  error metadata and staged processing result. `process-proposal.mjs` and
-  `stages.mjs` enable strict checking with `@ts-check`; the page uses these types
-  instead of arbitrary scopes and cache entries. Compile-only negative cases in
-  `tests/ai-contracts.types.ts` run as part of the normal TypeScript check.
-  Sequential stage completion and queue ownership still require runtime guards;
-  the local type assertions document those existing invariants, not validation
-  of untrusted responses. Model candidates and display statuses remain separate
-  from controller authority. Parsing, candidate application and canonical/controller
-  internals still use permissive types; migrating those requires parity checks.
-- Browser and complete AI acceptance are separate from unit/regression checks.
-  Complete AI runs and downloaded-output inspection for all five proposals remain
-  necessary before declaring this version accepted.
-- The older README contains historical implementation notes and pending-test
-  statements. Use observed acceptance results, not those historical statements,
-  when deciding release readiness.
-
-The later cancellation feedback fix is implemented; its queued-run browser
-recheck is covered by the acceptance checklist.
 
 ## Declining optional information
 
