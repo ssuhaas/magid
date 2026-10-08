@@ -39,7 +39,10 @@ export function controlledProvider(propose = () => []) {
       : scope.records;
     const proposal = { items: records.map(r => ({ recordId: r.id, sheet: r.sheet,
       anchors: r.anchors, section: '', ambiguous: false, boundaryReason: 'One original item.',
-      fields: propose(scope, r), extras: [] })), warnings: [] };
+      fields: propose(scope, r), extras: [] })), warnings: [],
+      ...(scope.mode === 'discover' ? { nonItems: scope.cells.filter(c => c.eligibleAnchor &&
+        !records.some(r => r.anchors.includes(c.cell))).map(c => ({ sheet: c.sheet, cell: c.cell,
+          disposition: 'context', quote: c.raw, reason: 'Explicit non-product source context.' })) } : {}) };
     return Response.json({ status: 'completed', output: [{ type: 'message', content: [
       { type: 'output_text', text: JSON.stringify(proposal) },
     ] }] });
@@ -113,4 +116,131 @@ test('a reusable factory isolates each call and caller diagnostics cannot affect
   ]);
   assert.equal(identification(a).cells.N2.raw, '001AB');
   assert.equal(identification(b).cells.N2.raw, '009ZZ');
+});
+
+const productField = (scope, r) => [{ column: 'E', value: scope.cells.find(c => c.cell === r.anchors[0]).raw,
+  kind: 'source_span', identifierType: 'not_identifier',
+  evidence: [{ sheet: r.sheet, cell: r.anchors[0], quote: scope.cells.find(c => c.cell === r.anchors[0]).raw }],
+  reason: 'Original product wording.' }];
+
+test('a recognized sheet still discovers a second table and a parallel lane', async () => {
+  const provider = controlledProvider(productField);
+  const cells = readWorkbook(tesla()).sheets[0].cells;
+  const values = { ...Object.fromEntries(Object.entries(cells).map(([a, c]) => [a, c.raw])),
+    A20: 'Product: Helmet' };
+  const out = identification(await createBidNormalizer({ key: 'synthetic-key', fetchImpl: provider.fetchImpl })(source(values, 'Bundled Bid-Recurring')));
+  assert.equal(out.cells.E3.raw, 'Product: Helmet');
+  assert.ok(provider.calls.some(c => c.scope.mode === 'discover'));
+  const lane = identification(await createBidNormalizer({ key: 'synthetic-key', fetchImpl: provider.fetchImpl })(source({
+    A1: 'Item', B1: 'Part #', D1: 'Item', E1: 'Part #', G1: 'Item', H1: 'Part #',
+    B4: '001AB', K4: 'Product: Visor' })));
+  assert.equal(lane.cells.E3.raw, 'Product: Visor');
+});
+
+test('known tables include product rows beyond the original sample endpoints', async () => {
+  const provider = controlledProvider(() => []);
+  for (const [name, values, expected] of [
+    ['Bundled Bid-Recurring', { B4: 'Item Description', E4: 'Manufacturer Part Number', B501: 'Last Tesla glove' }, 'Last Tesla glove'],
+    ['Approved Req', { D6: 'Description', B6: 'Quantity', D400: 'Last Daikin glove' }, 'Last Daikin glove'],
+    ['Bid', { E17: 'Annual usage', D17: 'Product model', C70: 'Last Hyundai glove' }, 'Last Hyundai glove'],
+  ]) {
+    const out = identification(await createBidNormalizer({ key: 'synthetic-key', fetchImpl: provider.fetchImpl })(source(values, name)));
+    assert.equal(out.cells.E2.raw, expected);
+  }
+});
+
+test('discovery omissions, duplicate coverage and empty recovered products cannot export', async () => {
+  for (const transform of [
+    p => ({ ...p, items: [] }),
+    p => ({ ...p, nonItems: [{ sheet: 'Bid', cell: 'A1', disposition: 'context', quote: 'Product: Glove', reason: 'Not an item.' }] }),
+    p => ({ ...p, items: p.items.map(i => ({ ...i, fields: [] })) }),
+    p => ({ ...p, items: p.items.map(i => ({ ...i, ambiguous: true })) }),
+    p => ({ ...p, warnings: ['Possible missing products.'] }),
+  ]) {
+    const provider = controlledProvider(productField);
+    const fetchImpl = async (...args) => {
+      const response = await provider.fetchImpl(...args), body = await response.json();
+      const text = body.output[0].content[0]; text.text = JSON.stringify(transform(JSON.parse(text.text)));
+      return Response.json(body);
+    };
+    await assert.rejects(createBidNormalizer({ key: 'synthetic-key', fetchImpl })(source({ A1: 'Product: Glove' })), /Source coverage could not be resolved at Bid!A1/);
+  }
+});
+
+test('a partially mapped proposal still discovers unmapped products', async () => {
+  const provider = controlledProvider(productField);
+  const out = identification(await createBidNormalizer({ key: 'synthetic-key', fetchImpl: provider.fetchImpl })(
+    source({ A1: 'Mapped glove', A3: 'Product: Helmet' }),
+    { mapping: { sheet: 'Bid', start: 1, end: 1, columns: { E: 'A' } } }));
+  assert.equal(out.cells.E2.raw, 'Mapped glove');
+  assert.equal(out.cells.E3.raw, 'Product: Helmet');
+});
+
+test('wrapped discoveries stay together and separate repeated source occurrences remain separate', async () => {
+  const provider = controlledProvider(productField);
+  const out = identification(await createBidNormalizer({ key: 'synthetic-key', fetchImpl: provider.fetchImpl })(
+    source({ A1: 'Product: Glove', A3: 'Product: Glove' })));
+  assert.equal(out.cells.E2.raw, 'Product: Glove'); assert.equal(out.cells.E3.raw, 'Product: Glove');
+  const fetchImpl = async (url, options) => {
+    const scope = JSON.parse(JSON.parse(options.body).input[0].content);
+    const proposal = { items: [{ recordId: '', sheet: 'Bid', anchors: ['A1', 'A2'], section: '',
+      ambiguous: false, boundaryReason: 'One wrapped product.', fields: [{ column: 'E', value: 'Product: Glove XL',
+        kind: 'interpretation', identifierType: 'not_identifier', reason: 'Full wrapped description.',
+        evidence: scope.cells.map(c => ({ sheet: c.sheet, cell: c.cell, quote: c.raw })) }], extras: [] }],
+      nonItems: [], warnings: [] };
+    return Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(proposal) }] }] });
+  };
+  assert.equal(identification(await createBidNormalizer({ key: 'synthetic-key', fetchImpl })(source({ A1: 'Product: Glove', A2: 'XL' }))).cells.E2.raw, 'Product: Glove XL');
+});
+
+test('unsafe unknown blocks and hidden product rows fail explicitly instead of disappearing', async () => {
+  const values = Object.fromEntries(Array.from({ length: 102 }, (_, i) => ['A' + (i + 1), 'Product: Glove']));
+  await assert.rejects(createBidNormalizer()(source(values)), /Unresolved long source block/);
+  const { unzipSync, strFromU8 } = await import('fflate');
+  const zip = unzipSync(source({ A1: 'Product: Glove' }));
+  const path = 'xl/worksheets/sheet1.xml';
+  zip[path] = strToU8(strFromU8(zip[path]).replace('<row r="1">', '<row r="1" hidden="1">'));
+  await assert.rejects(createBidNormalizer()(zipSync(zip)), /Unresolved hidden source at Bid!A1/);
+});
+
+test('ambiguous stock groups are recovered into individual products instead of placeholder rows', async () => {
+  const fetchImpl = async (url, options) => {
+    const scope = JSON.parse(JSON.parse(options.body).input[0].content);
+    const codes = scope.cells.filter(c => c.eligibleAnchor && /^[DEF](35|36)$/.test(c.cell));
+    const items = scope.mode === 'discover' ? codes.map(c => ({ recordId: '', sheet: c.sheet,
+      anchors: [c.cell], section: '', ambiguous: false, boundaryReason: 'A separate product code.', fields: [],
+      extras: [{ name: 'Source Product ID', meaning: 'Original unresolved product namespace.',
+        benefit: 'Identify each product for matching.', value: c.raw, reason: 'Literal source code.',
+        evidence: [{ sheet: c.sheet, cell: c.cell, quote: c.raw }] }] })) : [];
+    const nonItems = scope.mode === 'discover' ? scope.cells.filter(c => c.eligibleAnchor && !codes.includes(c)).map(c => ({
+      sheet: c.sheet, cell: c.cell, disposition: 'header', quote: c.raw, reason: 'Item list heading.' })) : undefined;
+    const proposal = { items, warnings: [], ...(nonItems ? { nonItems } : {}) };
+    return Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(proposal) }] }] });
+  };
+  const bytes = await createBidNormalizer({ key: 'synthetic-key', fetchImpl })(source({
+    A1: 'Item', B1: 'Part #', D1: 'Item', E1: 'Part #', G1: 'Item', H1: 'Part #',
+    D35: '001AB', E35: '002CD', F35: '003EF', D36: '004GH', E36: '005IJ', F36: '006KL' }));
+  const sheet = identification(bytes);
+  assert.equal(Object.keys(sheet.cells).filter(a => /^A\d+$/.test(a)).length - 1, 6);
+  assert.deepEqual(Array.from({ length: 6 }, (_, i) => sheet.cells['N' + (i + 2)].raw),
+    ['001AB', '002CD', '003EF', '004GH', '005IJ', '006KL']);
+});
+
+test('a second product table beyond Tesla quote columns is not silently excluded', async () => {
+  const provider = controlledProvider(productField);
+  const values = Object.fromEntries(Object.entries(readWorkbook(tesla()).sheets[0].cells).map(([a, c]) => [a, c.raw]));
+  values.P19 = 'Item Description'; values.P20 = 'Product: Helmet';
+  const out = identification(await createBidNormalizer({ key: 'synthetic-key', fetchImpl: provider.fetchImpl })(source(values, 'Bundled Bid-Recurring')));
+  assert.equal(out.cells.E3.raw, 'Product: Helmet');
+});
+
+test('enrichment boundary concerns cannot silently export a single unresolved item', async () => {
+  const provider = controlledProvider(() => []);
+  const fetchImpl = async (...args) => {
+    const response = await provider.fetchImpl(...args), body = await response.json();
+    const block = body.output[0].content[0], proposal = JSON.parse(block.text);
+    proposal.items[0].ambiguous = true; block.text = JSON.stringify(proposal);
+    return Response.json(body);
+  };
+  await assert.rejects(createBidNormalizer({ key: 'synthetic-key', fetchImpl })(tesla()), /Unresolved product boundaries/);
 });

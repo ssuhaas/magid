@@ -79,11 +79,19 @@ means the workbook was written; failures use a nonzero exit code.
   original descriptions. Source-proven fields are protected from AI regeneration.
 - Skip extraction for source-proven closed stock-list rows. Other groups run
   extraction only: this component does **not** call the independent AI evaluator.
-- For an unrecognized visible sheet, use bounded source-region AI discovery.
-  Discovery can split at region boundaries; complex unfamiliar layouts need
-  source/output acceptance testing. An optional request.mapping with sheet, start,
-  end and columns (template letter to source column) replaces automatic discovery
-  when the calling pipeline already knows a layout.
+- Inventory every populated source cell across all sheets. Recover unaccounted
+  regions even on recognized or partially mapped sheets. Discovery must account
+  for each target cell as an item anchor or explicit source-backed non-item context;
+  missing, duplicate or out-of-scope coverage rejects the call. Known item-bearing
+  columns and explicit product markers cannot be silently classified as context.
+- Known table parsers follow populated source rows rather than sample-file row
+  limits. Unrecognized contiguous regions remain intact so wrapped items are not
+  bisected. Blocks beyond 101 rows or the provider payload limit fail explicitly
+  rather than being truncated. Hidden populated source also fails explicitly;
+  unhide it or remove irrelevant hidden content before processing.
+- An optional request.mapping with sheet, start, end and columns (template letter
+  to source column) supplies initial item mappings. It does not waive coverage
+  of unmapped rows, columns or other sheets.
 - Automatically select additional source columns to retain useful identifiers,
   packaging, dated quantities and other extracted details. Column selection is an
   automated writer policy, not a human approval. The normalized A:M columns keep
@@ -95,16 +103,22 @@ means the workbook was written; failures use a nonzero exit code.
   field suggestions are omitted. Provider/structure failures reject the call;
   failed multi-item requests can split into single-item requests. No partial
   workbook is returned after a failed/canceled run.
-- Preserve ambiguous source groups as separate original occurrences; do not
-  invent a split or quietly drop them. The downstream evaluator owns judgments
-  about those groups, semantic accuracy and confidence.
+- Send ambiguous parser groups and unlabeled adjacent-code relationships back
+  through recovery discovery instead of
+  exporting several source codes as a single placeholder item. Unresolved
+  boundaries, discovery warnings or recovered products with no validated
+  description/identifier reject export. Errors identify source locations; the
+  caller must handle failed calls and must not treat them as completed bids.
 - Verify the template and exported values by readback. AI BID SETUP and other
   template worksheet contents remain unchanged.
 
 This workbook is an automatic intermediate pipeline output. It is **not** the
 prototype's human-reviewed final export. The existing UI and its strict review
 gate are unchanged. Source citations establish grounding, not proof of semantic
-accuracy; independent evaluation belongs to the larger pipeline.
+accuracy. Explicit accounting prevents unreported gaps, but a model can still
+misclassify unfamiliar product text as context. Arbitrary-layout completeness is
+not mathematically guaranteed; live source/output acceptance and independent
+evaluation remain necessary in the larger pipeline.
 
 Input limits remain 20 MiB compressed, 200 MiB expanded, and 2,000 output items.
 The library works in temporary request memory; it does not save bid files, start

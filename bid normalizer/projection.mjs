@@ -1,13 +1,29 @@
 import { automaticRule, automaticExtraRule } from './src/canonical/automatic.mjs';
-import { sourceRole } from './src/canonical/source-policy.mjs';
+import { sourceRole, sourceLayout } from './src/canonical/source-policy.mjs';
 import { precisionProblem, packagingConflict } from './src/canonical/source-facts.mjs';
+
+function customerSource(record, address, book) {
+  if (sourceRole(book, record.sheet, address) === 'customer_specification') return true;
+  const sheet = book.sheets.find(s => s.name === record.sheet);
+  const row = Number(address.replace(/\D/g, '')), column = address.replace(/\d+$/, '');
+  // A separately labeled table can live past the original supplier quote columns.
+  // Unlabeled quote data remains protected, even when AI suggests a product.
+  if (!record.boundaryReason.startsWith('AI boundary candidate:') ||
+      sourceLayout(sheet)?.kind !== 'tesla' || sheet.cells['B' + row]?.raw.trim()) return false;
+  for (let n = row - 1; n >= Math.max(1, row - 100); n--) {
+    const header = sheet.cells[column + n];
+    if (header?.raw.trim()) return !header.formula && !sheet.hiddenRows?.includes(String(n)) &&
+      /^(?:Item Description|Product Description)$/i.test(header.raw.trim());
+  }
+  return false;
+}
 
 function sourceSafe(record, field, book) {
   const sheet = book.sheets.find(s => s.name === record.sheet);
   return !!sheet && sheet.hidden === 'visible' && field.evidence.length > 0 &&
     !field.alternatives?.length && field.evidence.every(a => sheet.cells[a] &&
       sheet.cells[a].formula == null && !sheet.hiddenRows?.includes(a.replace(/\D/g, '')) &&
-      sourceRole(book, record.sheet, a) === 'customer_specification');
+      customerSource(record, a, book));
 }
 
 /** Projection is automatic policy, never a fabricated human/controller approval.
