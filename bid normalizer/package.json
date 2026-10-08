@@ -1,0 +1,15 @@
+{
+  "name": "@magid/bid-normalizer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13.0" },
+  "exports": { ".": { "types": "./index.d.ts", "import": "./index.mjs" } },
+  "bin": { "bid-normalizer": "./cli.mjs" },
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "dependencies": {
+    "@xmldom/xmldom": "0.9.12",
+    "fflate": "0.8.3",
+    "zod": "3.25.76"
+  }
+}
