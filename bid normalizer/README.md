@@ -1,7 +1,9 @@
 # Bid normalizer
 
 Copy this entire folder into your pipeline repository. It is a standalone Node.js
-component: bid proposal Excel bytes in, normalized Magid template Excel bytes out.
+component: bid proposal Excel bytes in, original proposal plus normalized Magid
+Excel template out. The original is an exact byte-for-byte copy, including its
+sheets, formatting, formulas and macros when supplied as .xlsm.
 It does not require the prototype UI, Next.js, Sites, browser storage or an API
 call to the old web app.
 
@@ -20,27 +22,37 @@ are bundled. template.xlsx is the supplied Magid template.
 ## Call from another backend or agent
 
 ```js
-import { readFile, writeFile } from 'node:fs/promises';
-import { createBidNormalizer } from './bid normalizer/index.mjs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createBidNormalizerWithSource } from './bid normalizer/index.mjs';
 
-const normalizeBid = createBidNormalizer({
+const normalizeBid = createBidNormalizerWithSource({
   provider: 'gemini',
   key: process.env.GEMINI_API_KEY,
   // model: 'your-enabled-model',
 });
 
-const normalizedExcel = await normalizeBid(await readFile('proposal.xlsx'), {
+const files = await normalizeBid(await readFile('proposal.xlsx'), {
   filename: 'proposal.xlsx',
   // signal: abortController.signal,
   // onProgress: event => console.log(event),
 });
 
-await writeFile('normalized.xlsx', normalizedExcel);
-// Pass normalizedExcel bytes or normalized.xlsx to the matching agent.
+await mkdir('normalizer-results', { recursive: true });
+await writeFile('normalizer-results/' + files.original.filename, files.original.bytes, { flag: 'wx' });
+await writeFile('normalizer-results/' + files.normalized.filename, files.normalized.bytes, { flag: 'wx' });
+// Pass ONLY files.normalized.bytes or the normalized path to the matching agent.
+// The original is available to the UI or later evaluator.
 ```
 
-The return value is Uint8Array containing an .xlsx workbook. There is no confidence
-report, review session or issue sidecar. Configure OpenAI with provider: 'openai'
+The return value has exactly two file entries: original and normalized, each with
+filename and Uint8Array bytes. Nothing is saved by the library. The host can offer
+two downloads or package the two files as a ZIP. Filenames are reduced to basenames.
+Keep source/output paths separate and don't overwrite the uploaded proposal.
+
+Existing callers can continue using createBidNormalizer, which returns only the
+normalized Uint8Array. Switch to createBidNormalizerWithSource when you need both.
+Keep the matching-agent input as normalized Excel, rather than the two-file object
+or its ZIP. There is no confidence report, review session or issue sidecar. Configure OpenAI with provider: 'openai'
 and its server-side API key instead. Credentials come from the calling backend;
 never call this component in a browser with a model key.
 
@@ -56,13 +68,20 @@ For TypeScript projects you can install this folder as a local file dependency:
 npm install "./bid normalizer"
 ```
 
-Then import createBidNormalizer from '@magid/bid-normalizer'; its declaration file
+Then import createBidNormalizerWithSource from '@magid/bid-normalizer'; its declaration file
 describes configuration, request options and return type.
 
 ## Call from a shell or a non-JavaScript agent
 
 Set AI_PROVIDER and the corresponding GEMINI_API_KEY or OPENAI_API_KEY in the
 server environment, then run:
+
+```sh
+node "bid normalizer/cli.mjs" --with-source proposal.xlsx results.zip
+```
+
+results.zip contains the original proposal and the normalized Excel workbook.
+The existing two-argument invocation still writes only normalized Excel:
 
 ```sh
 node "bid normalizer/cli.mjs" proposal.xlsx normalized.xlsx
@@ -126,7 +145,7 @@ evaluation remain necessary in the larger pipeline.
 Input limits remain 20 MiB compressed, 200 MiB expanded, and 2,000 output items.
 The library works in temporary request memory; it does not save bid files, start
 durable jobs, expose an HTTP endpoint or implement matching. The CLI writes only
-the output path explicitly supplied by its caller. Hosts own authentication,
+the normalized workbook or ZIP path explicitly supplied by its caller. Hosts own authentication,
 request limits, timeouts, transport and later queue/background-worker integration.
 
 ## Verification and maintenance

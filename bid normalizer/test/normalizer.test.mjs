@@ -268,3 +268,62 @@ test('contradictory duplicate anchors remain invalid rather than confidence deci
   };
   await assert.rejects(createBidNormalizer({ key: 'synthetic-key', fetchImpl })(source({ A1: 'Product: Glove' })), /contract validation/);
 });
+
+test('paired output preserves the entire original bytes and supplies normalized Excel separately', async () => {
+  const { createBidNormalizerWithSource } = await import('../index.mjs');
+  const { unzipSync, strFromU8 } = await import('fflate');
+  const entries = unzipSync(stock());
+  entries['[Content_Types].xml'] = strToU8(strFromU8(entries['[Content_Types].xml']).replace(
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml',
+    'application/vnd.ms-excel.sheet.macroEnabled.main+xml'));
+  entries['xl/vbaProject.bin'] = new Uint8Array([0, 255, 7, 128]); // Opaque source bytes are preserved, never executed.
+  const input = zipSync(entries), expected = input.slice();
+  const files = await createBidNormalizerWithSource()(input, { filename: 'C:\\uploads\\bid.xlsm' });
+  assert.deepEqual(Object.keys(files).sort(), ['normalized', 'original']);
+  assert.deepEqual(files.original.bytes, expected);
+  assert.equal(files.original.filename, 'bid.xlsm');
+  assert.equal(files.normalized.filename, 'bid-normalized.xlsx');
+  assert.equal(identification(files.normalized.bytes).cells.N2.raw, '001AB');
+  assert.notStrictEqual(files.original.bytes, input);
+});
+
+test('paired source snapshots isolate caller mutation and concurrent bids', async () => {
+  const { createBidNormalizerWithSource } = await import('../index.mjs');
+  const normalize = createBidNormalizerWithSource(), input = stock(), expected = input.slice();
+  const first = normalize(input, { filename: 'first.xlsx' }); input.fill(0);
+  const second = normalize(stock(), { filename: 'second.xlsx' });
+  const [a, b] = await Promise.all([first, second]);
+  assert.deepEqual(a.original.bytes, expected);
+  a.original.bytes.fill(0);
+  assert.deepEqual(b.original.bytes, expected);
+  assert.equal(b.original.filename, 'second.xlsx');
+  assert.equal(identification(a.normalized.bytes).cells.N2.raw, '001AB');
+});
+
+test('CLI paired mode writes exactly the two Excel files while legacy mode remains compatible', async () => {
+  const { mkdtemp, writeFile, readFile, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const { unzipSync } = await import('fflate');
+  const root = await mkdtemp(join(tmpdir(), 'magid-paired-'));
+  try {
+    const original = stock(), input = join(root, 'bid.xlsx'), zip = join(root, 'results.zip');
+    await writeFile(input, original);
+    const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
+    const paired = spawnSync(process.execPath, [cli, '--with-source', input, zip], { encoding: 'utf8' });
+    assert.equal(paired.status, 0, paired.stderr);
+    const files = unzipSync(await readFile(zip));
+    assert.deepEqual(Object.keys(files).sort(), ['bid-normalized.xlsx', 'bid.xlsx']);
+    assert.deepEqual(files['bid.xlsx'], original);
+    assert.equal(identification(files['bid-normalized.xlsx']).cells.N2.raw, '001AB');
+    assert.deepEqual(new Uint8Array(await readFile(input)), original);
+    const overwrite = spawnSync(process.execPath, [cli, '--with-source', input, zip], { encoding: 'utf8' });
+    assert.notEqual(overwrite.status, 0);
+    const output = join(root, 'legacy.xlsx');
+    const legacy = spawnSync(process.execPath, [cli, input, output], { encoding: 'utf8' });
+    assert.equal(legacy.status, 0, legacy.stderr);
+    assert.equal(identification(await readFile(output)).cells.N2.raw, '001AB');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

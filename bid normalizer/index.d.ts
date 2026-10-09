@@ -11,3 +11,9 @@ export type RequestOptions = {
 /** Returns normalized .xlsx bytes. Evaluation/review belongs to the caller's pipeline. */
 export function createBidNormalizer(config?: Configuration):
   (proposalBytes: Uint8Array, options?: RequestOptions) => Promise<Uint8Array>;
+
+export type ExcelFile = { filename: string; bytes: Uint8Array };
+export type NormalizationFiles = { original: ExcelFile; normalized: ExcelFile };
+/** Returns the unchanged source and normalized workbook; no persistent storage. */
+export function createBidNormalizerWithSource(config?: Configuration):
+  (proposalBytes: Uint8Array, options?: RequestOptions) => Promise<NormalizationFiles>;
