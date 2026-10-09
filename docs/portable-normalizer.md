@@ -1,8 +1,9 @@
 # Portable backend bundle
 
 The self-contained [bid normalizer folder](../bid%20normalizer/README.md) is the
-integration surface for the larger pipeline. It accepts proposal bytes and returns
-normalized Excel bytes. Matching consumes that workbook; no new matching JSON
+integration surface for the larger pipeline. It accepts proposal bytes and can return the original proposal plus normalized
+Excel through createBidNormalizerWithSource. The existing createBidNormalizer
+continues returning only normalized Excel bytes. Matching consumes that workbook; no new matching JSON
 contract or current-UI dependency is required.
 
 The portable entry point uses automatic writer selection without human decisions
@@ -21,7 +22,7 @@ has its own three-dependency lockfile, CLI, type declarations and synthetic test
 Original private source-workbook tests check the callable interface separately.
 
 Transfer the entire folder, run npm ci, configure the server model credential,
-and call createBidNormalizer. See its README for API and CLI examples and limits.
+and call createBidNormalizerWithSource. See its README for API and CLI examples and limits.
 
 ## Item completeness
 
@@ -41,3 +42,13 @@ Five private workbook regressions use controlled responses. Berry now verifies
 that the old ambiguous groups' source information remains in the exported workbook
 even when the model fails to resolve those groups. Live semantic accuracy and the
 independent evaluator remain separate acceptance checks.
+
+## Original proposal handoff
+
+createBidNormalizerWithSource returns { original, normalized }, each containing a
+basename filename and Excel bytes. The source is copied before processing and is
+not reconstructed from parsed XML. This preserves the full input byte-for-byte.
+It does not add provider calls or persistent storage. Send only normalized.bytes
+to the matching agent. The host owns downloads or storage of the two artifacts.
+The CLI --with-source mode packages them into a ZIP; the matcher needs its Excel
+entry, not that ZIP. Existing byte-only callers and CLI mode remain compatible.
