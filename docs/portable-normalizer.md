@@ -27,14 +27,17 @@ and call createBidNormalizer. See its README for API and CLI examples and limits
 
 The portable path inventories populated source cells, then recovers unaccounted
 regions on every sheet, including recognized layouts and partial mappings.
-Recovery has an explicit per-cell accounting contract. Known product cells must
-be anchors; missing accounting, ambiguous groups and unusable recovered items
-reject the call before export. Hidden populated content and oversized unknown
-contiguous blocks also reject rather than silently disappearing. No review UI,
-evaluation stage or additional return artifact is introduced.
+Ambiguous results, coverage warnings, hidden source and missing descriptions do
+not require human approval and do not block export. Missed source and unusable
+normalized items retain literal source text in description 2 with Original Source
+Cells for provenance. Unknown large regions use bounded requests, preserving all
+target cells; later evaluation may reconcile relationships across those requests.
 
-The five-workbook regression uses controlled responses: four preserve their
-established item counts; Berry verifies that a response which excludes the old
-ambiguous groups cannot return a deceptively complete workbook. Live AI recovery
-of those groups remains an acceptance check. Cell accounting cannot establish
-perfect semantic classification on arbitrary unseen layouts.
+Technical failures still reject the call: invalid files/templates, provider or
+credential failures, malformed/overlapping responses, cancellation and workbook
+capacity limits. Raw preserved rows are not certified individual products.
+
+Five private workbook regressions use controlled responses. Berry now verifies
+that the old ambiguous groups' source information remains in the exported workbook
+even when the model fails to resolve those groups. Live semantic accuracy and the
+independent evaluator remain separate acceptance checks.

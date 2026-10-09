@@ -38,23 +38,31 @@ export function validateDiscovery(scope, output) {
     accounted.add(key);
   };
   for (const item of proposal.items) {
-    if (item.ambiguous) throw Error('Unresolved product boundaries in discovery.');
     for (const cell of item.anchors) claim(item.sheet, cell);
   }
   for (const entry of nonItems) {
     claim(entry.sheet, entry.cell);
     const original = candidates.get(JSON.stringify([entry.sheet, entry.cell]));
-    if (entry.quote !== original.raw || /Item\s*#|^\s*Product:/i.test(original.raw))
-      throw Error('Product source or altered source quote cannot be classified as non-item context.');
+    if (entry.quote !== original.raw) throw Error('Non-item source quote was altered.');
+    if (/Item\s*#|^\s*Product:/i.test(original.raw)) accounted.delete(JSON.stringify([entry.sheet, entry.cell]));
   }
-  if (proposal.warnings.length) throw Error('Discovery reported unresolved source coverage.');
-  const missing = [...candidates].filter(([key]) => !accounted.has(key)).map(([, c]) => c.sheet + '!' + c.cell);
-  if (missing.length) throw Error('Unaccounted source cells: ' + missing.slice(0, 10).join(', '));
   const partitioned = partitionProposal(scope, proposal);
-  // A rejected description must never produce an empty placeholder instead of an item.
-  for (const item of partitioned.proposal.items)
-    if (!item.fields.some(f => ['E', 'F'].includes(f.column)) &&
-        !item.extras.some(e => /^Source Product ID$/i.test(e.name)))
-      throw Error('Recovered item has no validated description or source product identifier.');
+  const missing = [...candidates].filter(([key]) => !accounted.has(key)).map(([, c]) => c);
+  partitioned.proposal.items.push(...rawItems(missing));
+  // Uncertainty is preserved for the later evaluator; it never becomes an approval gate.
   return { ...partitioned, nonItems };
+}
+
+/** Preserve original unclassified source by row; never invent product facts. */
+export function rawItems(cells) {
+  const groups = new Map();
+  for (const cell of cells) {
+    const key = JSON.stringify([cell.sheet, cell.cell.replace(/\D/g, '')]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(cell);
+  }
+  return [...groups.values()].map(group => ({ recordId: '', sheet: group[0].sheet,
+    anchors: group.map(c => c.cell), section: '', ambiguous: true,
+    boundaryReason: 'Original source retained because product relationships are unresolved.',
+    fields: [], extras: [] }));
 }
